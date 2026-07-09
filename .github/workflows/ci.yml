@@ -1,0 +1,39 @@
+# CI for the cueBreaker SPA. Lives under .github/workflows so it runs on both
+# GitHub and the self-hosted Forgejo (git.horn) runners — mirrors the sibling
+# beetDeck / AlbFetcharr frontend repos.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Lint (eslint)
+        run: npm run lint
+      - name: Format check (prettier)
+        run: npm run format:check
+      - name: Type check (tsc)
+        run: npm run typecheck
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Test (vitest)
+        run: npm run test
+      - name: Build (sanity)
+        run: npm run build
