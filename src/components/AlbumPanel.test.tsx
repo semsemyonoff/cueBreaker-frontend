@@ -595,6 +595,129 @@ describe('AlbumPanel', () => {
     expect(screen.getByText('Retry')).toBeInTheDocument()
   })
 
+  it('renders the loading branch while the preview request is in flight', async () => {
+    let resolvePreview: (res: Response) => void = () => {}
+    const pending = new Promise<Response>((resolve) => {
+      resolvePreview = resolve
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => (url === '/api/preview' ? pending : Promise.resolve(jsonResponse({}))))
+    )
+
+    const { container } = render(<AlbumPanel item={item} />)
+
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    // The breadcrumb renders in all three branches, so the user knows what is loading.
+    expect(container.querySelector('.crumbs')).toBeInTheDocument()
+    expect(container.querySelector('.errbox')).toBeNull()
+
+    resolvePreview(
+      jsonResponse({
+        performer: 'Artist',
+        title: 'Album',
+        file: 'album.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: false,
+        output_tracks: 0,
+        total_seconds: 60,
+        tracks: [
+          { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      })
+    )
+
+    expect(await screen.findByText('Album')).toBeInTheDocument()
+    expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
+  it('stays on Loading… without issuing a request for an album with no CUE files', async () => {
+    // ⚠️ Pins today's behaviour, which is a dead end for the user: `cueFile` is ''
+    // so the preview effect returns early (AlbumPanel.tsx:71) and nothing ever
+    // resolves. Scan only lists CUE+FLAC pairs, so this shape should not reach the
+    // panel — recorded so the strand is a decision, not a surprise.
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({})))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AlbumPanel item={{ ...item, cue_files: [] }} />)
+
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('CUE file')).toBeNull()
+  })
+
+  it('surfaces a job that fails mid-split, leaving the running pill and waveform behind', async () => {
+    const previewBody = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
+      ],
+    }
+    // The likeliest real outcome on a bad CUE: the job reports progress, then dies.
+    const polls = [
+      {
+        status: 'splitting',
+        message: 'Splitting',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: 'track 1',
+      },
+      {
+        status: 'error',
+        message: 'shnsplit: cannot read input',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: '',
+      },
+    ]
+    let poll = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
+        if (url === '/api/split')
+          return Promise.resolve(jsonResponse({ job_id: 'job-1', status: 'queued' }, 202))
+        if (url === '/api/status/job-1') {
+          const body = polls[Math.min(poll, polls.length - 1)]
+          poll += 1
+          return Promise.resolve(jsonResponse(body))
+        }
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const { container } = render(<AlbumPanel item={item} />)
+
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+
+    // Mid-split: the ambient state says running everywhere.
+    expect(await screen.findByText('Splitting')).toBeInTheDocument()
+    expect(container.querySelector('.pill-run')).not.toBeNull()
+    expect(container.querySelector('.wave--active')).not.toBeNull()
+
+    expect(await screen.findByText('Split failed')).toBeInTheDocument()
+    expect(screen.getByText('shnsplit: cannot read input')).toBeInTheDocument()
+    expect(screen.getByText('Retry')).toBeInTheDocument()
+    // The failure must retract the running state, not sit alongside it.
+    expect(container.querySelector('.pill-run')).toBeNull()
+    expect(container.querySelector('.wave--active')).toBeNull()
+    expect(container.querySelector('.statusrow')).toBeNull()
+    expect(screen.getByText('Unsplit')).toBeInTheDocument()
+  })
+
   it('renders a failed preview in the designed errbox, not a bare paragraph', async () => {
     vi.stubGlobal(
       'fetch',

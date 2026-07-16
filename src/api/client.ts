@@ -42,6 +42,12 @@ export function scan(): Promise<ScanPair[]> {
   return request<ScanPair[]>('/api/scan')
 }
 
+/**
+ * Intentionally unused by the SPA: the sidebar filters the already-scanned list
+ * client-side, which is instant and works offline. Kept because `GET /api/search`
+ * is a real, documented endpoint of the backend's API (it appears in the OpenAPI
+ * spec), and this is its typed client.
+ */
 export function search(q: string): Promise<ScanPair[]> {
   return request<ScanPair[]>(`/api/search?q=${encodeURIComponent(q)}`)
 }

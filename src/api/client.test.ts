@@ -50,6 +50,28 @@ describe('scan', () => {
 
     await expect(scan()).rejects.toMatchObject(new ApiError(502, 'Bad Gateway'))
   })
+
+  it('falls back to statusText when the error body is JSON without an error field', async () => {
+    mockFetch(
+      jsonResponse({ detail: 'nope' }, { status: 500, statusText: 'Internal Server Error' })
+    )
+
+    await expect(scan()).rejects.toMatchObject(new ApiError(500, 'Internal Server Error'))
+  })
+
+  it('reports the status code when statusText is empty', async () => {
+    // fetch/undici leaves statusText '' for a code it has no canonical phrase for,
+    // which would otherwise throw an ApiError with an empty message.
+    mockFetch(new Response('not json', { status: 599, statusText: '' }))
+
+    await expect(scan()).rejects.toMatchObject(new ApiError(599, 'request failed with status 599'))
+  })
+
+  it('rejects when a 2xx body is not valid JSON', async () => {
+    mockFetch(new Response('<html>proxy error</html>', { status: 200 }))
+
+    await expect(scan()).rejects.toThrow()
+  })
 })
 
 describe('search', () => {
