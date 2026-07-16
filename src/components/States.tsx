@@ -14,16 +14,38 @@ export function EmptyScan({ onRescan }: { onRescan: () => void }) {
   )
 }
 
-export function ScanError({ message, onRetry }: { message: string; onRetry: () => void }) {
+export interface ScanErrorProps {
+  message: string
+  onRetry: () => void
+  /**
+   * Render as a strip above other content instead of a centred standing state.
+   * `App` uses it to report a failed rescan without unmounting an open panel —
+   * see the render chain there.
+   */
+  banner?: boolean
+}
+
+export function ScanError({ message, onRetry, banner = false }: ScanErrorProps) {
+  const box = (
+    <div className={banner ? 'errbox scanbanner' : 'errbox scanerror'}>
+      <div className="eh">
+        <ErrIcon />
+        Library scan failed
+      </div>
+      <div className="em">{message}</div>
+      {banner && (
+        <button className="rescan" type="button" onClick={onRetry}>
+          Retry
+        </button>
+      )}
+    </div>
+  )
+
+  if (banner) return box
+
   return (
     <div className="emptybox">
-      <div className="errbox scanerror">
-        <div className="eh">
-          <ErrIcon />
-          Library scan failed
-        </div>
-        <div className="em">{message}</div>
-      </div>
+      {box}
       <button className="rescan" type="button" onClick={onRetry}>
         Retry
       </button>

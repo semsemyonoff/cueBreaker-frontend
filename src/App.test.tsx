@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ScanPair } from './api/types'
 import App from './App'
 
@@ -409,22 +409,24 @@ describe('App', () => {
     expect(scans).toBe(scansAfterMount)
   })
 
+  /** `splittingBackend`, but with `/api/scan` failing while `fail()` is true. */
+  function scanFailingBackend(fail: () => boolean) {
+    const backend = splittingBackend([album])
+    return (url: string) => {
+      if (url === '/api/scan' && fail()) {
+        return Promise.resolve(errorResponse(500, 'backend is down'))
+      }
+      return backend(url)
+    }
+  }
+
   it('surfaces a scan failure even while an album is selected', async () => {
     let fail = false
-    const fetchMock = vi.fn((url: string) => {
-      if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-      if (url === '/api/scan') {
-        return fail
-          ? Promise.resolve(errorResponse(500, 'backend is down'))
-          : Promise.resolve(jsonResponse([album]))
-      }
-      return Promise.resolve(jsonResponse([]))
-    })
-    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('fetch', vi.fn(scanFailingBackend(() => fail)))
 
     render(<App />)
 
-    // Select the album, so the render chain would reach the `selected` branch.
+    // Select the album, so the render chain reaches the `selected` branch.
     fireEvent.click(await screen.findByText('Album'))
     expect(screen.queryByText('Select an album from the library.')).not.toBeInTheDocument()
 
@@ -433,5 +435,35 @@ describe('App', () => {
 
     expect(await screen.findByText('Library scan failed')).toBeInTheDocument()
     expect(screen.getByText('backend is down')).toBeInTheDocument()
+  })
+
+  // The panel owns `jobRun`/`runToken` and drives `usePoll`, so replacing it with
+  // the error would strand a split running behind the failed Rescan.
+  it('keeps a running split polling through a failed rescan, alongside the error', async () => {
+    let fail = false
+    vi.stubGlobal('fetch', vi.fn(scanFailingBackend(() => fail)))
+
+    const { container } = render(<App />)
+
+    fireEvent.click(await screen.findByText('Album'))
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+    await waitFor(() =>
+      expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting1 unsplit')
+    )
+
+    fail = true
+    fireEvent.click(screen.getByRole('button', { name: 'Rescan' }))
+
+    expect(await screen.findByText('Library scan failed')).toBeInTheDocument()
+    // The panel is still mounted and still polling: the topbar keeps its summary
+    // and the statusrow keeps reporting progress.
+    expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting1 unsplit')
+    expect(screen.getByText('Track 1')).toBeInTheDocument()
+
+    // Retry recovers and drops the banner without disturbing the split.
+    fail = false
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByText('Library scan failed')).not.toBeInTheDocument())
+    expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting1 unsplit')
   })
 })

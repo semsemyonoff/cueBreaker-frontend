@@ -84,19 +84,26 @@ export default function App() {
     // works on. It is also what makes `refreshToken` reach a live panel at all;
     // remounting would refetch anyway and the prop would be dead code.
     content = <ScanningLibrary />
-  } else if (scanError) {
-    // Must precede `selected`: a failed rescan with an album open would otherwise
-    // render AlbumPanel and the error would never surface.
-    content = <ScanError message={scanError} onRetry={rescan} />
   } else if (selected) {
+    // A scan error with an album open is reported *above* the panel, never in place
+    // of it. Replacing it would unmount AlbumPanel — discarding `jobRun`/`runToken`
+    // and stopping `usePoll` — so a failed Rescan during a split would strand the
+    // job: no progress, no `onJobDone`, and a Split button back to idle that only
+    // answers 409 while the backend works on. The banner surfaces the failure and
+    // carries the same Retry, which is all the standing state was ever for.
     content = (
-      <AlbumPanel
-        item={selected}
-        refreshToken={refreshToken}
-        onActiveJobChange={setActiveJob}
-        onJobDone={refreshItems}
-      />
+      <>
+        {scanError && <ScanError message={scanError} onRetry={rescan} banner />}
+        <AlbumPanel
+          item={selected}
+          refreshToken={refreshToken}
+          onActiveJobChange={setActiveJob}
+          onJobDone={refreshItems}
+        />
+      </>
     )
+  } else if (scanError) {
+    content = <ScanError message={scanError} onRetry={rescan} />
   } else if (items.length === 0) {
     content = <EmptyScan onRescan={rescan} />
   } else {

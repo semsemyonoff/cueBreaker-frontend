@@ -242,6 +242,26 @@
   text-align: left;
 }
 
+/* The banner form sits above a still-mounted AlbumPanel, so it carries its own
+   Retry inline rather than the emptybox's centred one. */
+.errbox.scanbanner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 0;
+  margin-bottom: 18px;
+}
+
+.errbox.scanbanner .eh {
+  margin-bottom: 0;
+}
+
+.errbox.scanbanner .em {
+  flex: 1;
+  min-width: 140px;
+}
+
 .emptybox {
   flex: 1;
   display: flex;
