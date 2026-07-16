@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
+import type { ScanPair } from './api/types'
 import App from './App'
 
 function jsonResponse(body: unknown): Response {
@@ -28,6 +29,52 @@ const album = {
 afterEach(() => {
   vi.unstubAllGlobals()
 })
+
+/**
+ * A backend whose every album previews two tracks and whose split never finishes —
+ * so a job stays `splitting` for as long as a test needs to observe it.
+ */
+function splittingBackend(items: ScanPair[] | (() => ScanPair[])) {
+  const scanned = typeof items === 'function' ? items : () => items
+  return (url: string) => {
+    if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
+    if (url === '/api/scan') return Promise.resolve(jsonResponse(scanned()))
+    if (url === '/api/preview') {
+      return Promise.resolve(
+        jsonResponse({
+          performer: 'Artist',
+          title: 'Album',
+          file: 'album.flac',
+          genre: '',
+          date: '',
+          has_cover: false,
+          split_done: false,
+          output_tracks: 0,
+          total_seconds: 60,
+          tracks: [
+            { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+            { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
+          ],
+        })
+      )
+    }
+    if (url === '/api/split')
+      return Promise.resolve(jsonResponse({ job_id: 'j1', status: 'queued' }))
+    if (url === '/api/status/j1') {
+      return Promise.resolve(
+        jsonResponse({
+          status: 'splitting',
+          message: 'Splitting',
+          result_files: [],
+          progress_current: 1,
+          progress_total: 2,
+          progress_detail: 'Track 1',
+        })
+      )
+    }
+    return Promise.resolve(jsonResponse([]))
+  }
+}
 
 describe('App', () => {
   it('renders the app shell and the empty-scan state when no albums are found', async () => {
@@ -184,6 +231,69 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rescan' }))
 
     expect(await screen.findByText('Select an album from the library.')).toBeInTheDocument()
+  })
+
+  it('lifts a running split into the topbar and the tree row', async () => {
+    const other = { ...album, path: 'Other' }
+    vi.stubGlobal('fetch', vi.fn(splittingBackend([album, other])))
+
+    const { container } = render(<App />)
+
+    fireEvent.click(await screen.findByText('Album'))
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+
+    await vi.waitFor(() =>
+      expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting2 unsplit')
+    )
+    expect(container.querySelector('.dot')?.className).toBe('dot run')
+    // Only the splitting album reports progress; its sibling keeps its cue count.
+    const metas = [...container.querySelectorAll('.tameta')].map((el) => el.textContent)
+    expect(metas).toEqual(['50%', '1 cue'])
+  })
+
+  it('clears the topbar splitting state when the album is switched away', async () => {
+    const other = { ...album, path: 'Other' }
+    vi.stubGlobal('fetch', vi.fn(splittingBackend([album, other])))
+
+    const { container } = render(<App />)
+
+    fireEvent.click(await screen.findByText('Album'))
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+    await vi.waitFor(() =>
+      expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting2 unsplit')
+    )
+
+    // The job keeps running on the backend, but it is no longer this panel's job —
+    // the topbar must not keep claiming a split for the album now on screen.
+    fireEvent.click(screen.getByText('Other'))
+
+    await vi.waitFor(() =>
+      expect(container.querySelector('.tstat')?.textContent).toBe('2 albums2 unsplit')
+    )
+    expect(container.querySelector('.dot')?.className).toBe('dot')
+  })
+
+  it('clears the topbar splitting state when the panel unmounts', async () => {
+    let items = [album]
+    vi.stubGlobal('fetch', vi.fn(splittingBackend(() => items)))
+
+    const { container } = render(<App />)
+
+    fireEvent.click(await screen.findByText('Album'))
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+    await vi.waitFor(() =>
+      expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting1 unsplit')
+    )
+
+    // A rescan that drops the album unmounts the panel mid-split.
+    items = []
+    fireEvent.click(screen.getByRole('button', { name: 'Rescan' }))
+
+    expect(await screen.findByText('No unsplit CUE + FLAC albums found')).toBeInTheDocument()
+    await vi.waitFor(() =>
+      expect(container.querySelector('.tstat')?.textContent).toBe('0 albums0 unsplit')
+    )
+    expect(container.querySelector('.dot')?.className).toBe('dot')
   })
 
   it('surfaces a scan failure even while an album is selected', async () => {

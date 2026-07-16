@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { ScanPair } from '../api/types'
+import type { ActiveJob, ScanPair } from '../api/types'
 import { buildTree, filterTree } from '../tree/buildTree'
 import Tree from './Tree'
 
@@ -8,9 +8,16 @@ export interface SidebarProps {
   selectedPath: string | null
   onSelect: (item: ScanPair) => void
   onRescan: () => void
+  activeJob?: ActiveJob | null
 }
 
-export default function Sidebar({ items, selectedPath, onSelect, onRescan }: SidebarProps) {
+export default function Sidebar({
+  items,
+  selectedPath,
+  onSelect,
+  onRescan,
+  activeJob = null,
+}: SidebarProps) {
   const [query, setQuery] = useState('')
 
   const tree = useMemo(() => filterTree(buildTree(items), query), [items, query])
@@ -29,7 +36,7 @@ export default function Sidebar({ items, selectedPath, onSelect, onRescan }: Sid
           Rescan
         </button>
       </div>
-      <Tree nodes={tree} selectedPath={selectedPath} onSelect={onSelect} />
+      <Tree nodes={tree} selectedPath={selectedPath} onSelect={onSelect} activeJob={activeJob} />
     </div>
   )
 }

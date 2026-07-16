@@ -45,6 +45,23 @@ export const ACTIVE_STATUSES: ReadonlySet<JobStatusValue> = new Set<JobStatusVal
   'tagging',
 ])
 
+/**
+ * The ambient summary of a running split. Job state itself stays in AlbumPanel
+ * (moving `usePoll` up would restart polling on unrelated re-renders and break
+ * its `runToken` restart semantics); this is the slice the topbar and tree need.
+ */
+export interface ActiveJob {
+  path: string
+  status: JobStatusValue
+  progressCurrent: number
+  progressTotal: number
+}
+
+/** Percent complete for a job, 0 while its total is not yet known. */
+export function progressPercent(current: number, total: number): number {
+  return total > 0 ? (current / total) * 100 : 0
+}
+
 /** GET /api/status/{job_id} response. */
 export interface JobStatus {
   status: JobStatusValue

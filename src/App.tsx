@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as api from './api/client'
-import type { ScanPair } from './api/types'
+import type { ActiveJob, ScanPair } from './api/types'
 import AlbumPanel from './components/AlbumPanel'
 import Shell from './components/Shell'
 import { EmptyScan, ScanError, ScanningLibrary } from './components/States'
@@ -14,6 +14,9 @@ export default function App() {
   const [scanning, setScanning] = useState(true)
   const [scanError, setScanError] = useState<string | null>(null)
   const [refreshToken, setRefreshToken] = useState(0)
+  // AlbumPanel owns the polling; App is the only path from it to Shell, since the
+  // panel is passed to Shell as opaque children.
+  const [activeJob, setActiveJob] = useState<ActiveJob | null>(null)
 
   const rescan = useCallback(() => {
     setScanning(true)
@@ -55,7 +58,9 @@ export default function App() {
     // render AlbumPanel and the error would never surface.
     content = <ScanError message={scanError} onRetry={rescan} />
   } else if (selected) {
-    content = <AlbumPanel item={selected} refreshToken={refreshToken} />
+    content = (
+      <AlbumPanel item={selected} refreshToken={refreshToken} onActiveJobChange={setActiveJob} />
+    )
   } else if (items.length === 0) {
     content = <EmptyScan onRescan={rescan} />
   } else {
@@ -69,6 +74,7 @@ export default function App() {
       onSelect={setSelected}
       onRescan={rescan}
       version={version}
+      activeJob={activeJob}
     >
       {content}
     </Shell>

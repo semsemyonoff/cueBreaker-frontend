@@ -9,6 +9,7 @@ describe('Topbar version badge', () => {
         version="1.2.3"
         albumCount={4}
         unsplitCount={2}
+        splittingCount={0}
         drawerOpen={false}
         drawerId="library-drawer"
         onBurgerClick={() => {}}
@@ -24,6 +25,7 @@ describe('Topbar version badge', () => {
         version=""
         albumCount={0}
         unsplitCount={0}
+        splittingCount={0}
         drawerOpen={false}
         drawerId="library-drawer"
         onBurgerClick={() => {}}

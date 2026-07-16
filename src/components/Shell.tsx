@@ -7,7 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
-import type { ScanPair } from '../api/types'
+import type { ActiveJob, ScanPair } from '../api/types'
 import {
   MAX_SIDEBAR_WIDTH,
   MIN_SIDEBAR_WIDTH,
@@ -30,6 +30,8 @@ export interface ShellProps {
   onSelect: (item: ScanPair) => void
   onRescan: () => void
   version: string
+  /** The running split, lifted out of AlbumPanel via App; drives the topbar dot and tree progress. */
+  activeJob?: ActiveJob | null
   children?: ReactNode
 }
 
@@ -39,6 +41,7 @@ export default function Shell({
   onSelect,
   onRescan,
   version,
+  activeJob = null,
   children,
 }: ShellProps) {
   const [sidebarWidth, setSidebarWidth] = useState(() => loadWidth())
@@ -143,6 +146,7 @@ export default function Shell({
         version={version}
         albumCount={albumCount}
         unsplitCount={unsplitCount}
+        splittingCount={activeJob === null ? 0 : 1}
         drawerOpen={drawerOpen}
         drawerId={DRAWER_ID}
         burgerRef={burgerRef}
@@ -162,6 +166,7 @@ export default function Shell({
             selectedPath={selectedPath}
             onSelect={selectAndClose}
             onRescan={onRescan}
+            activeJob={activeJob}
           />
           <div
             className="resizer"

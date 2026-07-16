@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
+import type { ActiveJob } from '../api/types'
 import Shell from './Shell'
 
 const DESKTOP_WIDTH = 1440
@@ -121,6 +122,79 @@ describe('Shell resizer keyboard a11y', () => {
 
     fireEvent.keyDown(resizer, { key: 'a' })
     expect(resizer).toHaveAttribute('aria-valuenow', '220')
+  })
+})
+
+describe('Shell ambient splitting state', () => {
+  const album = {
+    path: 'Album',
+    abs_path: '/input/Album',
+    cue_files: ['album.cue', 'other.cue'],
+    flac_files: ['album.flac'],
+    split_done: false,
+    output_tracks: 0,
+  }
+
+  function renderWithJob(activeJob: ActiveJob | null) {
+    return render(
+      <Shell
+        items={[album]}
+        selectedPath="Album"
+        onSelect={() => {}}
+        onRescan={() => {}}
+        version="1.0.0"
+        activeJob={activeJob}
+      />
+    )
+  }
+
+  it('shows the album count and a calm dot when nothing is splitting', () => {
+    const { container } = renderWithJob(null)
+
+    expect(container.querySelector('.dot')?.className).toBe('dot')
+    expect(container.querySelector('.tstat')?.textContent).toBe('1 albums1 unsplit')
+    expect(container.querySelector('.tameta')?.textContent).toBe('2 cues')
+  })
+
+  it('replaces the album count with "1 splitting", runs the dot, and shows tree progress', () => {
+    const { container } = renderWithJob({
+      path: 'Album',
+      status: 'splitting',
+      progressCurrent: 5,
+      progressTotal: 8,
+    })
+
+    expect(container.querySelector('.dot')?.className).toBe('dot run')
+    expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting1 unsplit')
+    expect(container.querySelector('.tameta')?.textContent).toBe('63%')
+  })
+
+  it('leaves other albums alone while one is splitting', () => {
+    const other = { ...album, path: 'Other', cue_files: ['other.cue'] }
+    const { container } = render(
+      <Shell
+        items={[album, other]}
+        selectedPath="Album"
+        onSelect={() => {}}
+        onRescan={() => {}}
+        version="1.0.0"
+        activeJob={{ path: 'Album', status: 'splitting', progressCurrent: 1, progressTotal: 4 }}
+      />
+    )
+
+    const metas = [...container.querySelectorAll('.tameta')].map((el) => el.textContent)
+    expect(metas).toEqual(['25%', '1 cue'])
+  })
+
+  it('shows 0% rather than NaN before the job reports a total', () => {
+    const { container } = renderWithJob({
+      path: 'Album',
+      status: 'queued',
+      progressCurrent: 0,
+      progressTotal: 0,
+    })
+
+    expect(container.querySelector('.tameta')?.textContent).toBe('0%')
   })
 })
 

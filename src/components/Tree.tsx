@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from 'react'
 import { useState } from 'react'
-import type { ScanPair } from '../api/types'
+import { progressPercent } from '../api/types'
+import type { ActiveJob, ScanPair } from '../api/types'
 import {
   loadOpenPaths,
   toggleOpenPath,
@@ -14,6 +15,7 @@ export interface TreeProps {
   nodes: TreeNode[]
   selectedPath: string | null
   onSelect: (item: ScanPair) => void
+  activeJob?: ActiveJob | null
 }
 
 function activateOnKey(handler: () => void) {
@@ -25,7 +27,7 @@ function activateOnKey(handler: () => void) {
   }
 }
 
-export default function Tree({ nodes, selectedPath, onSelect }: TreeProps) {
+export default function Tree({ nodes, selectedPath, onSelect, activeJob = null }: TreeProps) {
   const [openPaths, setOpenPaths] = useState<OpenPaths>(() => loadOpenPaths())
 
   function toggle(path: string) {
@@ -40,6 +42,7 @@ export default function Tree({ nodes, selectedPath, onSelect }: TreeProps) {
         onToggle={toggle}
         selectedPath={selectedPath}
         onSelect={onSelect}
+        activeJob={activeJob}
       />
     </div>
   )
@@ -51,9 +54,17 @@ interface TreeNodesProps {
   onToggle: (path: string) => void
   selectedPath: string | null
   onSelect: (item: ScanPair) => void
+  activeJob: ActiveJob | null
 }
 
-function TreeNodes({ nodes, openPaths, onToggle, selectedPath, onSelect }: TreeNodesProps) {
+function TreeNodes({
+  nodes,
+  openPaths,
+  onToggle,
+  selectedPath,
+  onSelect,
+  activeJob,
+}: TreeNodesProps) {
   return (
     <>
       {nodes.map((node) =>
@@ -66,6 +77,7 @@ function TreeNodes({ nodes, openPaths, onToggle, selectedPath, onSelect }: TreeN
             onToggle={onToggle}
             selectedPath={selectedPath}
             onSelect={onSelect}
+            activeJob={activeJob}
           />
         ) : (
           <AlbumRow
@@ -73,6 +85,7 @@ function TreeNodes({ nodes, openPaths, onToggle, selectedPath, onSelect }: TreeN
             node={node}
             isSelected={node.path === selectedPath}
             onSelect={onSelect}
+            activeJob={activeJob}
           />
         )
       )}
@@ -87,6 +100,7 @@ function FolderRow({
   onToggle,
   selectedPath,
   onSelect,
+  activeJob,
 }: {
   node: FolderNode
   isOpen: boolean
@@ -94,6 +108,7 @@ function FolderRow({
   onToggle: (path: string) => void
   selectedPath: string | null
   onSelect: (item: ScanPair) => void
+  activeJob: ActiveJob | null
 }) {
   const toggleThis = () => onToggle(node.path)
 
@@ -119,6 +134,7 @@ function FolderRow({
             onToggle={onToggle}
             selectedPath={selectedPath}
             onSelect={onSelect}
+            activeJob={activeJob}
           />
         </div>
       )}
@@ -130,16 +146,20 @@ function AlbumRow({
   node,
   isSelected,
   onSelect,
+  activeJob,
 }: {
   node: AlbumNode
   isSelected: boolean
   onSelect: (item: ScanPair) => void
+  activeJob: ActiveJob | null
 }) {
   const { item } = node
   const selectThis = () => onSelect(item)
+  const splitting = activeJob !== null && activeJob.path === item.path
   const classes = ['talbum']
   if (isSelected) classes.push('active')
-  if (item.split_done) classes.push('done')
+  // A running split outranks the stale `split_done` from the last scan.
+  if (item.split_done && !splitting) classes.push('done')
 
   return (
     <div
@@ -157,7 +177,11 @@ function AlbumRow({
         <i />
       </span>
       <span className="taname">{node.name}</span>
-      {item.split_done ? (
+      {splitting ? (
+        <span className="tameta">
+          {Math.round(progressPercent(activeJob.progressCurrent, activeJob.progressTotal))}%
+        </span>
+      ) : item.split_done ? (
         <span className="tcheck">✓</span>
       ) : (
         <span className="tameta">
