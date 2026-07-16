@@ -23,6 +23,10 @@ function splitPath(path: string): string[] {
   return path.split('/').filter(Boolean)
 }
 
+// Pinned to an explicit locale: a bare localeCompare() resolves against the runtime's
+// default, so CI, the dev container and a browser could each order siblings differently.
+const pathCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'variant' })
+
 /**
  * Builds a nested folder/album tree from flat scan-relative paths.
  *
@@ -32,7 +36,7 @@ function splitPath(path: string): string[] {
  * instead of colliding with it.
  */
 export function buildTree(items: ScanPair[]): TreeNode[] {
-  const sorted = [...items].sort((a, b) => a.path.localeCompare(b.path))
+  const sorted = [...items].sort((a, b) => pathCollator.compare(a.path, b.path))
 
   const folderPaths = new Set<string>()
   for (const item of sorted) {
