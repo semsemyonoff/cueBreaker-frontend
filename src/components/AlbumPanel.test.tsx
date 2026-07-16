@@ -490,6 +490,69 @@ describe('AlbumPanel', () => {
     expect(screen.queryByLabelText('CUE file')).toBeNull()
   })
 
+  it('fires exactly one preview per album switch, pairing each album with its own CUE', async () => {
+    const previews: Record<string, unknown> = {
+      'a.cue': {
+        performer: 'Artist',
+        title: 'A',
+        file: 'a.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: false,
+        output_tracks: 0,
+        total_seconds: 60,
+        tracks: [
+          { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      },
+      'b.cue': {
+        performer: 'Artist',
+        title: 'B',
+        file: 'b.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: false,
+        output_tracks: 0,
+        total_seconds: 60,
+        tracks: [
+          { number: 1, title: 'Uno', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      },
+    }
+    const requests: { path: string; cue_file: string }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/preview' && init?.body) {
+          const body = JSON.parse(String(init.body)) as { path: string; cue_file: string }
+          requests.push(body)
+          const preview = previews[body.cue_file]
+          // The backend 404s a CUE the album does not own — exactly the bogus
+          // pairing this test exists to prove we never send.
+          if (!preview) return Promise.resolve(jsonResponse({ error: 'CUE file not found' }, 404))
+          return Promise.resolve(jsonResponse(preview))
+        }
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const albumA: ScanPair = { ...item, path: 'Artist/A', cue_files: ['a.cue'] }
+    const albumB: ScanPair = { ...item, path: 'Artist/B', cue_files: ['b.cue'] }
+
+    const { rerender } = render(<AlbumPanel item={albumA} />)
+    expect(await screen.findByText('A')).toBeInTheDocument()
+
+    rerender(<AlbumPanel item={albumB} />)
+    expect(await screen.findByText('B')).toBeInTheDocument()
+
+    expect(requests).toEqual([
+      { path: 'Artist/A', cue_file: 'a.cue' },
+      { path: 'Artist/B', cue_file: 'b.cue' },
+    ])
+  })
+
   it('shows a retry option when the split request itself fails', async () => {
     vi.stubGlobal(
       'fetch',
