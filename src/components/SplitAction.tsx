@@ -1,5 +1,6 @@
 import { ACTIVE_STATUSES } from '../api/types'
 import type { JobStatus } from '../api/types'
+import { ErrIcon } from './icons'
 
 export interface SplitActionProps {
   trackCount: number
@@ -79,7 +80,7 @@ export default function SplitAction({
           disabled={active}
           onClick={onSplit}
         >
-          {active && <span className="spin" />}
+          {active ? <span className="spin" /> : <SplitIcon />}
           {active
             ? 'Processing…'
             : failMessage
@@ -112,11 +113,13 @@ function WarnIcon() {
   )
 }
 
-function ErrIcon() {
+/** The prototype's 3-bar split mark (proto:108-110) — bars sized by CSS, not markup. */
+function SplitIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f36a6f" strokeWidth="2.4">
-      <path d="M12 8v5M12 17h.01" />
-      <circle cx="12" cy="12" r="9" />
-    </svg>
+    <span className="pi" aria-hidden="true">
+      <i />
+      <i />
+      <i />
+    </span>
   )
 }

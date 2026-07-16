@@ -80,6 +80,31 @@
   filter: brightness(1.08);
 }
 
+.btn-split .pi {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  height: 16px;
+}
+
+.btn-split .pi i {
+  width: 2.5px;
+  border-radius: 2px;
+  background: #eafaff;
+}
+
+.btn-split .pi i:nth-child(1) {
+  height: 7px;
+}
+
+.btn-split .pi i:nth-child(2) {
+  height: 14px;
+}
+
+.btn-split .pi i:nth-child(3) {
+  height: 10px;
+}
+
 .btn-split.dis {
   background: var(--bg2);
   color: var(--dim);

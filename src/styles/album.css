@@ -14,10 +14,6 @@
   font-weight: 600;
 }
 
-.album-error {
-  color: var(--red);
-}
-
 .album-loading {
   color: var(--dim);
 }
@@ -177,13 +173,27 @@
   border-right: 1px solid var(--border2);
 }
 
+/* Deviation from proto:122-123 (a div + inline <svg>): the native <select> is kept for
+   its a11y and touch behaviour, so the chevron rides along as a background image —
+   `appearance: none` is what removes the UA's own arrow and lets it show. */
 .cuesel .cv {
-  padding: 0 12px;
+  padding: 0 30px 0 12px;
   font: 500 12.5px var(--mono);
   color: var(--text);
   background: transparent;
   border: none;
   height: 100%;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23646d88' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 9l7 7 7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+
+/* The popup list is UA-rendered, so it never inherits the panel's dark theme. */
+.cuesel .cv option {
+  background: var(--bg2);
+  color: var(--text);
 }
 
 .wavewrap {

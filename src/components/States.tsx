@@ -1,3 +1,5 @@
+import { ErrIcon } from './icons'
+
 const SCANBAR_COUNT = 7
 
 export function EmptyScan({ onRescan }: { onRescan: () => void }) {
@@ -26,15 +28,6 @@ export function ScanError({ message, onRetry }: { message: string; onRetry: () =
         Retry
       </button>
     </div>
-  )
-}
-
-function ErrIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f36a6f" strokeWidth="2.4">
-      <path d="M12 8v5M12 17h.01" />
-      <circle cx="12" cy="12" r="9" />
-    </svg>
   )
 }
 

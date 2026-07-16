@@ -594,4 +594,26 @@ describe('AlbumPanel', () => {
     expect(await screen.findByText('Already in progress')).toBeInTheDocument()
     expect(screen.getByText('Retry')).toBeInTheDocument()
   })
+
+  it('renders a failed preview in the designed errbox, not a bare paragraph', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview')
+          return Promise.resolve(jsonResponse({ error: 'CUE file not found' }, 404))
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const { container } = render(<AlbumPanel item={item} />)
+
+    const head = await screen.findByText('Preview failed')
+    expect(head).toBeInTheDocument()
+    expect(screen.getByText('CUE file not found')).toBeInTheDocument()
+    // The errbox is the same element split errors use — one error language, not two.
+    expect(container.querySelector('.errbox')).toBeInTheDocument()
+    expect(container.querySelector('.album-error')).toBeNull()
+    // The breadcrumb stays, so the user still knows which album failed.
+    expect(container.querySelector('.crumbs')).toBeInTheDocument()
+  })
 })

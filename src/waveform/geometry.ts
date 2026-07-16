@@ -1,7 +1,7 @@
 import type { Track } from '../api/types'
 
-/** Number of synthetic bars drawn across the waveform (matches the prototype). */
-export const BAR_COUNT = 68
+/** Number of synthetic bars drawn across the waveform (matches the prototype's 72 per layer). */
+export const BAR_COUNT = 72
 
 const MIN_BAR_HEIGHT = 1
 const MAX_BAR_HEIGHT = 10
