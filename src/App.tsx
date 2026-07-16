@@ -42,6 +42,30 @@ export default function App() {
       .finally(() => setScanning(false))
   }, [])
 
+  // A job completing changes `items` — the album has just gained its split output —
+  // with no user action behind it. Refreshing them quietly (no `scanning` state, so
+  // no spinner unmounts the open panel; no `scanError`, so a hiccup here cannot tear
+  // down a panel that has just finished a split) keeps the topbar counters and the
+  // tree's ✓ honest. The panel's own `preview` is refreshed separately, by its
+  // `doneToken`.
+  const refreshItems = useCallback(() => {
+    api
+      .scan()
+      .then((next) => {
+        setItems(next)
+        // Keep the current object when the album survives the scan but is somehow
+        // absent from it: dropping the selection out from under a finished split
+        // would be worse than briefly stale `cue_files`.
+        setSelected((current) =>
+          current === null ? null : (next.find((pair) => pair.path === current.path) ?? current)
+        )
+      })
+      .catch(() => {
+        // Best-effort: the counters stay stale, exactly as they would have without
+        // this refresh. Rescan remains the user's escape hatch.
+      })
+  }, [])
+
   useEffect(() => {
     rescan()
     api
@@ -59,7 +83,12 @@ export default function App() {
     content = <ScanError message={scanError} onRetry={rescan} />
   } else if (selected) {
     content = (
-      <AlbumPanel item={selected} refreshToken={refreshToken} onActiveJobChange={setActiveJob} />
+      <AlbumPanel
+        item={selected}
+        refreshToken={refreshToken}
+        onActiveJobChange={setActiveJob}
+        onJobDone={refreshItems}
+      />
     )
   } else if (items.length === 0) {
     content = <EmptyScan onRescan={rescan} />

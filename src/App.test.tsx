@@ -296,6 +296,95 @@ describe('App', () => {
     expect(container.querySelector('.dot')?.className).toBe('dot')
   })
 
+  it('self-corrects the topbar counter and the tree row when a job completes', async () => {
+    // The backend that Finding 1 was found against: the split really finishes, and
+    // the album is only `split_done` on the scan *after* it does.
+    let done = false
+    const scanned = () => [{ ...album, split_done: done, output_tracks: done ? 2 : 0 }]
+    const fetchMock = vi.fn((url: string) => {
+      if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
+      if (url === '/api/scan') return Promise.resolve(jsonResponse(scanned()))
+      if (url === '/api/preview') {
+        return Promise.resolve(
+          jsonResponse({
+            performer: 'Artist',
+            title: 'Album',
+            file: 'album.flac',
+            genre: '',
+            date: '',
+            has_cover: false,
+            split_done: done,
+            output_tracks: done ? 2 : 0,
+            total_seconds: 60,
+            tracks: [
+              { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+              {
+                number: 2,
+                title: 'Two',
+                performer: 'Artist',
+                index: '00:30:00',
+                start_seconds: 30,
+              },
+            ],
+          })
+        )
+      }
+      if (url === '/api/split')
+        return Promise.resolve(jsonResponse({ job_id: 'j1', status: 'queued' }))
+      if (url === '/api/status/j1') {
+        done = true
+        return Promise.resolve(
+          jsonResponse({
+            status: 'done',
+            message: 'Done',
+            result_files: ['01.flac', '02.flac'],
+            progress_current: 2,
+            progress_total: 2,
+            progress_detail: '',
+          })
+        )
+      }
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { container } = render(<App />)
+
+    fireEvent.click(await screen.findByText('Album'))
+    expect(container.querySelector('.tstat')?.textContent).toBe('1 albums1 unsplit')
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+
+    // No Rescan click anywhere in this test: every item-derived surface must
+    // correct itself off the job's own completion.
+    await vi.waitFor(() =>
+      expect(container.querySelector('.tstat')?.textContent).toBe('1 albums0 unsplit')
+    )
+    // The row swaps its cue count for the ✓ and gains `done`.
+    await vi.waitFor(() => expect(container.querySelector('.tcheck')?.textContent).toBe('✓'))
+    expect(container.querySelector('.tameta')).toBeNull()
+    expect(container.querySelector('.talbum')?.className).toContain('done')
+  })
+
+  it('does not re-scan when the album is switched', async () => {
+    // Guards the overload the fix sketch warns about: the `activeJob` summary goes
+    // null on album switch too, so a rescan keyed off it would fire here.
+    const other = { ...album, path: 'Other' }
+    const fetchMock = vi.fn(splittingBackend([album, other]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    await screen.findByText('Select an album from the library.')
+    const scansAfterMount = fetchMock.mock.calls.filter(([url]) => url === '/api/scan').length
+
+    fireEvent.click(screen.getByText('Album'))
+    await screen.findByText('Split 2 tracks')
+    fireEvent.click(screen.getByText('Other'))
+    await screen.findByText('Split 2 tracks')
+
+    const scans = fetchMock.mock.calls.filter(([url]) => url === '/api/scan').length
+    expect(scans).toBe(scansAfterMount)
+  })
+
   it('surfaces a scan failure even while an album is selected', async () => {
     let fail = false
     const fetchMock = vi.fn((url: string) => {
