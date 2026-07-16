@@ -9,12 +9,14 @@ sibling `beetDeck` / `AlbFetcharr` orgs.
 
 - `src/api/` — typed API client (`client.ts`) + domain types (`types.ts`).
 - `src/tree/` — flat scan paths → library tree (`buildTree.ts`).
-- `src/waveform/` — cut-line geometry (`geometry.ts`): INDEX + total duration → percent positions.
+- `src/waveform/` — cut-line geometry (`geometry.ts`): INDEX + total duration → percent
+  positions, plus the `MM:SS` timecode formatter.
 - `src/split/` — `usePoll.ts` split-status polling hook.
-- `src/ui/` — `resizer.ts` sidebar drag logic.
+- `src/ui/` — `resizer.ts` sidebar drag logic; `useIsMobile.ts` (mirrors the 900px CSS breakpoint).
 - `src/components/` — Shell (topbar + resizable sidebar + panel), Tree, Sidebar, Topbar,
   AlbumPanel, CueSelector, TrackTable, Waveform, SplitAction, States.
 - `src/styles/` — design tokens + per-area CSS. Dark theme only.
+- `src/setupTests.ts` — jsdom gap-fillers loaded before every suite (see Conventions).
 - Tests co-located as `*.test.ts(x)`.
 
 ## Commands
@@ -35,6 +37,19 @@ npm run typecheck      # tsc -b --noEmit
 - **Vitest** for non-visual logic (tree building, waveform geometry, API client, split
   polling). Mock `fetch`; use `@testing-library/react` for component tests. Pure-visual/CSS
   work is verified by `npm run build` + manual QA against the prototype.
+- `setupTests.ts` patches three jsdom gaps that tests otherwise trip over: Testing Library's
+  `cleanup` is registered by hand (vitest runs without `globals: true`, so auto-cleanup never
+  fires), `window.localStorage` is polyfilled (Node 22's global shadows jsdom's), and
+  `matchMedia` is replaced with a stub that actually evaluates `(max-width: Npx)` and re-emits
+  on resize — drive the viewport in a test by setting `window.innerWidth` and firing `resize`.
+- **The waveform is decorative and stays that way** — decided during planning, not an
+  oversight to fix. The 150 `.wbar` heights are CSS-authored and identical for every album;
+  the backend exposes only `start_seconds` + `total_seconds`, never peaks, and we do not
+  intend to add peak extraction. What *is* real is the cut lines, derived from the CUE
+  `INDEX` values. The `.wtime` timecode row exists to keep that honest: it gives the cuts a
+  visible time axis so they read as measured against the track times rather than implying the
+  bars behind them are audio analysis. Do not remove `.wtime`, and do not treat the flat bars
+  as a bug.
 - **ESLint** (flat config, typescript-eslint) + **Prettier** (`eslint-config-prettier` last,
   so Prettier owns formatting): no semicolons, single quotes, 100-col. Run `npm run format`
   before committing; CI runs `lint` + `format:check` + `typecheck`.

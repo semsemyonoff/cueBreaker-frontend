@@ -23,15 +23,20 @@ pattern used across the sibling `beetDeck` / `AlbFetcharr` products.
 src/
   api/        typed API client + domain types (client.ts, types.ts)
   tree/       flat-paths → library hierarchy builder
-  waveform/   cut-line geometry (INDEX + duration → percent positions)
+  waveform/   cut-line geometry (INDEX + duration → percent positions) + MM:SS formatting
   split/      split-status polling hook (usePoll)
-  ui/         sidebar resizer
+  ui/         sidebar resizer, useIsMobile (mirrors the 900px CSS breakpoint)
   components/ Shell, Tree, Sidebar, Topbar, AlbumPanel, Waveform, ...
   styles/     design tokens + per-area CSS
 ```
 
-Tests are co-located as `*.test.ts` / `*.test.tsx`. Visual/CSS work is verified by
+Tests are co-located as `*.test.ts` / `*.test.tsx`, with jsdom gap-fillers (cleanup,
+`localStorage`, `matchMedia`) in `src/setupTests.ts`. Visual/CSS work is verified by
 `npm run build` + manual QA against the design prototype (kept in the workspace repo).
+
+The waveform itself is **decorative** by design — the bars are CSS, not audio peaks. The cut
+lines drawn over them are real, derived from the CUE `INDEX` times, and the timecode row under
+the waveform gives them a visible axis. See `AGENTS.md` for the reasoning.
 
 ## Development
 
