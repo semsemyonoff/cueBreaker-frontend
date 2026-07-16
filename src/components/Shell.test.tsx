@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { ActiveJob } from '../api/types'
 import Shell from './Shell'
@@ -122,6 +122,91 @@ describe('Shell resizer keyboard a11y', () => {
 
     fireEvent.keyDown(resizer, { key: 'a' })
     expect(resizer).toHaveAttribute('aria-valuenow', '220')
+  })
+})
+
+// jsdom 25 does not implement PointerEvent, and dom-testing-library then falls back
+// to a plain Event, which drops `clientX` — the one field the drag reads. A MouseEvent
+// carries it and React dispatches it to onPointerDown by type name all the same.
+function pointer(type: string, clientX: number): MouseEvent {
+  return new MouseEvent(type, { bubbles: true, cancelable: true, clientX })
+}
+
+describe('Shell resizer drag', () => {
+  function startDrag(clientX: number) {
+    const { container } = renderShell()
+    const resizer = container.querySelector('.resizer')!
+    const sidewrap = container.querySelector('.sidewrap') as HTMLElement
+    fireEvent(resizer, pointer('pointerdown', clientX))
+    return { container, resizer, sidewrap }
+  }
+
+  const widthOf = (sidewrap: HTMLElement) => sidewrap.style.getPropertyValue('--sidebar-w')
+
+  it('tracks the pointer, applying the delta to the width at drag start', () => {
+    const { resizer, sidewrap } = startDrag(300)
+
+    fireEvent(window, pointer('pointermove', 400))
+    expect(widthOf(sidewrap)).toBe('400px')
+    expect(resizer).toHaveAttribute('aria-valuenow', '400')
+
+    // Deltas are measured from the drag origin, not the previous move.
+    fireEvent(window, pointer('pointermove', 350))
+    expect(widthOf(sidewrap)).toBe('350px')
+  })
+
+  it('clamps the dragged width to the 220/480 bounds', () => {
+    const { sidewrap } = startDrag(300)
+
+    fireEvent(window, pointer('pointermove', 900))
+    expect(widthOf(sidewrap)).toBe('480px')
+
+    fireEvent(window, pointer('pointermove', 0))
+    expect(widthOf(sidewrap)).toBe('220px')
+  })
+
+  it('freezes the width once the pointer is released', () => {
+    const { sidewrap } = startDrag(300)
+
+    fireEvent(window, pointer('pointermove', 400))
+    fireEvent(window, pointer('pointerup', 400))
+
+    fireEvent(window, pointer('pointermove', 250))
+    expect(widthOf(sidewrap)).toBe('400px')
+  })
+
+  it('persists the dragged width to localStorage', () => {
+    const { sidewrap } = startDrag(300)
+
+    fireEvent(window, pointer('pointermove', 420))
+    fireEvent(window, pointer('pointerup', 420))
+
+    expect(widthOf(sidewrap)).toBe('420px')
+    expect(window.localStorage.getItem('cuebreaker.sidebar.width')).toBe('420')
+  })
+
+  it('removes the drag listeners when unmounted mid-drag', () => {
+    const { container, unmount } = renderShell()
+    const resizer = container.querySelector('.resizer')!
+
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    fireEvent(resizer, pointer('pointerdown', 300))
+    const added = Object.fromEntries(addSpy.mock.calls.map(([type, handler]) => [type, handler]))
+    addSpy.mockRestore()
+
+    const removeSpy = vi.spyOn(window, 'removeEventListener')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    unmount()
+
+    // The exact handlers this drag registered, not a stale closure from an earlier render.
+    expect(removeSpy).toHaveBeenCalledWith('pointermove', added.pointermove)
+    expect(removeSpy).toHaveBeenCalledWith('pointerup', added.pointerup)
+
+    expect(() => window.dispatchEvent(pointer('pointermove', 400))).not.toThrow()
+    expect(consoleError).not.toHaveBeenCalled()
+
+    removeSpy.mockRestore()
+    consoleError.mockRestore()
   })
 })
 

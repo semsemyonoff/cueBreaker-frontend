@@ -150,4 +150,104 @@ describe('usePoll hook', () => {
     await idle()
     expect(fetchMock.mock.calls.length).toBe(callsAtError) // no polling after fetch error
   })
+
+  it('reports every step of queued -> splitting -> tagging -> done with its progress', async () => {
+    const steps: JobStatus[] = [
+      job({ status: 'queued', progress_total: 4 }),
+      job({ status: 'splitting', progress_current: 1, progress_total: 4 }),
+      job({ status: 'tagging', progress_current: 3, progress_total: 4 }),
+      job({ status: 'done', progress_current: 4, progress_total: 4 }),
+    ]
+    let i = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        const body = steps[Math.min(i, steps.length - 1)]
+        i += 1
+        return Promise.resolve(jobResponse(body))
+      })
+    )
+
+    // Sample on every render rather than through waitFor, which polls and would
+    // miss the intermediate statuses this test exists to pin.
+    const seen: string[] = []
+    const { result } = renderHook(() => {
+      const state = usePoll('Artist/Album/album.cue', 0, 10)
+      if (state.job) {
+        const step = `${state.job.status} ${state.job.progress_current}/${state.job.progress_total}`
+        if (seen[seen.length - 1] !== step) seen.push(step)
+      }
+      return state
+    })
+
+    await waitFor(() => expect(result.current.job?.status).toBe('done'))
+    expect(seen).toEqual(['queued 0/4', 'splitting 1/4', 'tagging 3/4', 'done 4/4'])
+  })
+
+  it('stops polling on unmount', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jobResponse(job({ status: 'splitting' }))))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result, unmount } = renderHook(() => usePoll('Artist/Album/album.cue', 0, 10))
+
+    await waitFor(() => expect(result.current.job?.status).toBe('splitting'))
+    unmount()
+    const callsAtUnmount = fetchMock.mock.calls.length
+
+    await idle()
+    // An interval surviving unmount would leak a request every intervalMs.
+    expect(fetchMock.mock.calls.length).toBe(callsAtUnmount)
+  })
+
+  it('discards an in-flight response from a job it has already moved off', async () => {
+    // The first job's request hangs; the second's answers immediately. Releasing the
+    // stale one afterwards must not clobber the current job's state — this is the
+    // `cancelled` guard, and it is the one route by which the guard is observable:
+    // after an *unmount* React silently drops the dispatch either way, so the same
+    // scenario there would pass with the guard deleted.
+    let releaseStale: () => void = () => {}
+    const stale = new Promise<Response>((resolve) => {
+      releaseStale = () => resolve(jobResponse(job({ status: 'error', message: 'stale' })))
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        String(url).includes('first')
+          ? stale
+          : Promise.resolve(jobResponse(job({ status: 'done' })))
+      )
+    )
+
+    const { result, rerender } = renderHook(({ jobId }) => usePoll(jobId, 0, 10), {
+      initialProps: { jobId: 'first' },
+    })
+
+    rerender({ jobId: 'second' })
+    await waitFor(() => expect(result.current.job?.status).toBe('done'))
+
+    releaseStale()
+    await stale
+    await idle()
+
+    expect(result.current.job?.status).toBe('done')
+    expect(result.current.job?.message).toBe('')
+  })
+
+  it('resets to the initial state and issues no request when jobId becomes null', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jobResponse(job({ status: 'done' }))))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result, rerender } = renderHook(({ jobId }) => usePoll(jobId, 0, 10), {
+      initialProps: { jobId: 'Artist/Album/album.cue' as string | null },
+    })
+
+    await waitFor(() => expect(result.current.job?.status).toBe('done'))
+    const callsBeforeClear = fetchMock.mock.calls.length
+
+    rerender({ jobId: null })
+    expect(result.current).toEqual(initialPollState)
+
+    await idle()
+    expect(fetchMock.mock.calls.length).toBe(callsBeforeClear)
+  })
 })
