@@ -83,6 +83,17 @@
   cursor: default;
 }
 
+/* The visible line is 1px — unhoverable with a mouse, impossible on touch. A transparent
+   ::before widens the hit area to 13px without changing what is drawn. */
+.cut::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  right: -6px;
+}
+
 .cut-hover {
   background: var(--cyan2);
   box-shadow: 0 0 8px rgba(145, 242, 255, 0.6);
