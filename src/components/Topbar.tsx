@@ -1,14 +1,35 @@
+import type { Ref } from 'react'
+
 export interface TopbarProps {
   version: string
   albumCount: number
   unsplitCount: number
+  drawerOpen: boolean
+  drawerId: string
+  burgerRef?: Ref<HTMLButtonElement>
   onBurgerClick: () => void
 }
 
-export default function Topbar({ version, albumCount, unsplitCount, onBurgerClick }: TopbarProps) {
+export default function Topbar({
+  version,
+  albumCount,
+  unsplitCount,
+  drawerOpen,
+  drawerId,
+  burgerRef,
+  onBurgerClick,
+}: TopbarProps) {
   return (
     <div className="dtop">
-      <button className="burger" type="button" aria-label="Toggle library" onClick={onBurgerClick}>
+      <button
+        className="burger"
+        type="button"
+        ref={burgerRef}
+        aria-label="Toggle library"
+        aria-expanded={drawerOpen}
+        aria-controls={drawerId}
+        onClick={onBurgerClick}
+      >
         <i />
         <i />
         <i />
