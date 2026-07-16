@@ -128,12 +128,17 @@ export default function Shell({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [drawerOpen])
 
+  // Both moves key on the open/close *transition*, never on the current state:
+  // `isMobile` is also a dep, so a viewport flip with the drawer already open
+  // re-runs this, and an unguarded `if (drawerOpen)` would yank focus back to
+  // the search box from wherever the user had tabbed to.
   useEffect(() => {
+    const opened = drawerOpen && !wasOpen.current
     const closedByUser = wasOpen.current && !drawerOpen
     wasOpen.current = drawerOpen
     if (!isMobile) return
 
-    if (drawerOpen) {
+    if (opened) {
       drawerRef.current?.querySelector<HTMLElement>('input, button, [tabindex="0"]')?.focus()
     } else if (closedByUser) {
       burgerRef.current?.focus()

@@ -215,7 +215,7 @@ describe('Tree with non-ASCII names', () => {
     )
   })
 
-  it('orders mixed-script siblings by the pinned collator, not the runtime default', () => {
+  it('orders mixed-script siblings ahead of Latin ones', () => {
     renderTree([
       pair('Lossless/Эпидемия - Придумай светлый мир'),
       pair('Lossless/Blue Meridian'),
@@ -230,5 +230,18 @@ describe('Tree with non-ASCII names', () => {
       'Ария - Герой асфальта',
       'Эпидемия - Придумай светлый мир',
     ])
+  })
+
+  // The one ordering a bare localeCompare() gets wrong ('Disc 10' before
+  // 'Disc 2', lexicographically). Without this the collator's `numeric: true`
+  // is unpinned and reverting it passes the suite — the Cyrillic case above
+  // sorts identically either way.
+  it('orders numbered siblings numerically, not lexicographically', () => {
+    renderTree([pair('Lossless/Disc 10'), pair('Lossless/Disc 2'), pair('Lossless/Disc 1')])
+
+    fireEvent.click(screen.getByText('Lossless').closest('.tfolder')!)
+
+    const names = [...document.querySelectorAll('.taname')].map((el) => el.textContent)
+    expect(names).toEqual(['Disc 1', 'Disc 2', 'Disc 10'])
   })
 })

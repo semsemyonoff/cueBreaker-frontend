@@ -70,7 +70,9 @@ describe('scan', () => {
   it('rejects when a 2xx body is not valid JSON', async () => {
     mockFetch(new Response('<html>proxy error</html>', { status: 200 }))
 
-    await expect(scan()).rejects.toThrow()
+    // Matched on type: a bare toThrow() passes on any rejection, including an
+    // ApiError from a misread status — the opposite of what this pins.
+    await expect(scan()).rejects.toThrow(SyntaxError)
   })
 })
 

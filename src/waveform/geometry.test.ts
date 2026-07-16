@@ -7,6 +7,12 @@ function track(number: number, start_seconds: number): Track {
 }
 
 describe('barHeights', () => {
+  // Pinned to the literal: every other assertion here compares against the
+  // constant itself, so a change to it would otherwise pass the whole suite.
+  it('draws the prototype’s 72 bars per layer', () => {
+    expect(BAR_COUNT).toBe(72)
+  })
+
   it('returns BAR_COUNT heights by default, each within 1-10', () => {
     const heights = barHeights()
     expect(heights).toHaveLength(BAR_COUNT)

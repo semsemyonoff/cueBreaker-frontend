@@ -34,9 +34,21 @@ Tests are co-located as `*.test.ts` / `*.test.tsx`, with jsdom gap-fillers (clea
 `localStorage`, `matchMedia`) in `src/setupTests.ts`. Visual/CSS work is verified by
 `npm run build` + manual QA against the design prototype (kept in the workspace repo).
 
-The waveform itself is **decorative** by design — the bars are CSS, not audio peaks. The cut
-lines drawn over them are real, derived from the CUE `INDEX` times, and the timecode row under
-the waveform gives them a visible axis. See `AGENTS.md` for the reasoning.
+The waveform itself is **decorative** by design — the bars are synthetic, not audio peaks. The
+cut lines drawn over them are real, derived from the CUE `INDEX` times, and the timecode row
+under the waveform gives them a visible axis. See `AGENTS.md` for the reasoning.
+
+## Keyboard & accessibility
+
+The sidebar resizer is keyboard-operable: arrow keys move it 16px (64px with Shift), `Home`
+and `End` jump to the minimum and maximum width. On mobile, `Escape` closes the library
+drawer and focus returns to the burger; the closed drawer is `inert`, so it never eats
+keyboard focus from the content behind it. Library rows are reachable by Tab and activate on
+`Enter`/`Space`.
+
+While a split runs, the topbar reports it in place of the album count and the album's tree row
+shows its progress. A library scan that fails says so and offers Retry, rather than rendering
+as an empty library.
 
 ## Development
 

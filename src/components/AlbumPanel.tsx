@@ -88,7 +88,13 @@ export default function AlbumPanel({
     api
       .preview(item.path, cueFile)
       .then((result) => {
-        if (!cancelled) setPreview(result)
+        // Clearing on success as well as on identity change: a refetch that
+        // recovers from a failed one must drop the error, or the errbox below
+        // (checked before `preview`) masks the panel for the rest of the visit.
+        if (!cancelled) {
+          setPreview(result)
+          setError(null)
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err))
@@ -115,16 +121,27 @@ export default function AlbumPanel({
   const onJobDoneRef = useRef(onJobDone)
   onJobDoneRef.current = onJobDone
 
+  // Which run has already been reported, so a *re*-observation of it stays silent.
+  // `jobRun` outlives an album switch by design, so returning to a split album
+  // restores its `jobId` and `usePoll` re-fetches the same `done` — without this
+  // latch that replays the signal, re-scanning the library and refetching the
+  // preview on every visit. Keyed on `runToken` too: a split-again re-runs the
+  // same deterministic job ID and must be allowed to report its own completion.
+  const signalledRun = useRef<string | null>(null)
+
   // A completed job is the one event that writes to `/output` without changing
   // the preview effect's keys — `split_done`/`output_tracks` would stay stale.
   // The same transition is the owner's only cue that `items` moved too: the album
   // just gained its split output, so the topbar counters and the tree's ✓ are now
   // wrong until something re-scans.
   useEffect(() => {
-    if (jobStatus !== 'done') return
+    if (jobStatus !== 'done' || jobId === null) return
+    const runKey = `${runToken}:${jobId}`
+    if (signalledRun.current === runKey) return
+    signalledRun.current = runKey
     setDoneToken((n) => n + 1)
     onJobDoneRef.current?.()
-  }, [jobStatus])
+  }, [jobStatus, jobId, runToken])
 
   const activeStatus = active ? job.status : null
   const progressCurrent = job?.progress_current ?? 0

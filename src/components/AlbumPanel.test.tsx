@@ -739,4 +739,104 @@ describe('AlbumPanel', () => {
     // The breadcrumb stays, so the user still knows which album failed.
     expect(container.querySelector('.crumbs')).toBeInTheDocument()
   })
+
+  it('recovers from a failed refetch once a later one succeeds', async () => {
+    const body = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 120,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+      ],
+    }
+    let calls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') {
+          calls += 1
+          // Succeed, fail the refetch, then succeed again.
+          return Promise.resolve(
+            calls === 2 ? jsonResponse({ error: 'backend hiccup' }, 500) : jsonResponse(body)
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const { rerender } = render(<AlbumPanel item={item} refreshToken={0} />)
+    expect(await screen.findByText('Album')).toBeInTheDocument()
+
+    rerender(<AlbumPanel item={item} refreshToken={1} />)
+    expect(await screen.findByText('Preview failed')).toBeInTheDocument()
+
+    // The error must not outlive the failure that set it: the panel is keyed on
+    // the same album throughout, so nothing else would ever clear it.
+    rerender(<AlbumPanel item={item} refreshToken={2} />)
+    expect(await screen.findByText('Album')).toBeInTheDocument()
+    expect(screen.queryByText('Preview failed')).toBeNull()
+  })
+
+  it('reports a completed job once, not again when the album is revisited', async () => {
+    const other: ScanPair = { ...item, path: 'Artist/Other' }
+    const previewFor = (title: string) => ({
+      performer: 'Artist',
+      title,
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 120,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+      ],
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/preview') {
+          const { path } = JSON.parse(String(init?.body)) as { path: string }
+          return Promise.resolve(jsonResponse(previewFor(path)))
+        }
+        if (url === '/api/split') return Promise.resolve(jsonResponse({ job_id: 'j1' }, 202))
+        if (url.startsWith('/api/status/'))
+          return Promise.resolve(
+            jsonResponse({
+              status: 'done',
+              message: 'Split complete',
+              result_files: ['01.flac'],
+              progress_current: 1,
+              progress_total: 1,
+              progress_detail: '',
+            })
+          )
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const onJobDone = vi.fn()
+    const { rerender } = render(<AlbumPanel item={item} onJobDone={onJobDone} />)
+
+    fireEvent.click(await screen.findByText('Split 1 tracks'))
+    expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+    expect(onJobDone).toHaveBeenCalledTimes(1)
+
+    // `jobRun` survives an album switch by design, so coming back restores the
+    // job id and re-polls the same `done`. That must not re-signal the owner —
+    // it would re-scan the whole library on every visit to a split album.
+    rerender(<AlbumPanel item={other} onJobDone={onJobDone} />)
+    expect(await screen.findByText('Artist/Other')).toBeInTheDocument()
+    rerender(<AlbumPanel item={item} onJobDone={onJobDone} />)
+    expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+
+    expect(onJobDone).toHaveBeenCalledTimes(1)
+  })
 })

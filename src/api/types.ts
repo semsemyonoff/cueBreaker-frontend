@@ -57,9 +57,15 @@ export interface ActiveJob {
   progressTotal: number
 }
 
-/** Percent complete for a job, 0 while its total is not yet known. */
+/**
+ * Percent complete for a job, 0 while its total is not yet known, clamped to
+ * 0-100. The counts are derived from `shnsplit`'s stderr, so `current` can
+ * overshoot `total` (a pregap/hidden track); every caller renders this directly,
+ * and `105%` in the tree is worse than a pinned `100%`.
+ */
 export function progressPercent(current: number, total: number): number {
-  return total > 0 ? (current / total) * 100 : 0
+  if (total <= 0) return 0
+  return Math.min(100, Math.max(0, (current / total) * 100))
 }
 
 /** GET /api/status/{job_id} response. */

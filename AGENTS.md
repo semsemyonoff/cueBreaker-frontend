@@ -14,7 +14,8 @@ sibling `beetDeck` / `AlbFetcharr` orgs.
 - `src/split/` — `usePoll.ts` split-status polling hook.
 - `src/ui/` — `resizer.ts` sidebar drag logic; `useIsMobile.ts` (mirrors the 900px CSS breakpoint).
 - `src/components/` — Shell (topbar + resizable sidebar + panel), Tree, Sidebar, Topbar,
-  AlbumPanel, CueSelector, TrackTable, Waveform, SplitAction, States.
+  AlbumPanel, CueSelector, TrackTable, Waveform, SplitAction, States. `icons.tsx` holds the
+  icons used by more than one component; single-use icons stay co-located with their caller.
 - `src/styles/` — design tokens + per-area CSS. Dark theme only.
 - `src/setupTests.ts` — jsdom gap-fillers loaded before every suite (see Conventions).
 - Tests co-located as `*.test.ts(x)`.
@@ -43,13 +44,34 @@ npm run typecheck      # tsc -b --noEmit
   `matchMedia` is replaced with a stub that actually evaluates `(max-width: Npx)` and re-emits
   on resize — drive the viewport in a test by setting `window.innerWidth` and firing `resize`.
 - **The waveform is decorative and stays that way** — decided during planning, not an
-  oversight to fix. The 150 `.wbar` heights are CSS-authored and identical for every album;
-  the backend exposes only `start_seconds` + `total_seconds`, never peaks, and we do not
-  intend to add peak extraction. What *is* real is the cut lines, derived from the CUE
+  oversight to fix. The `BAR_COUNT` (72) `.wbar` heights per layer come from `barHeights()`
+  in `waveform/geometry.ts` — a fixed-seed LCG, not `Math.random()`, so they are stable
+  across renders and tests — and are emitted as the CSS classes `h1`..`h10`, which is all
+  the stylesheet decides. They are identical for every album; the backend exposes only
+  `start_seconds` + `total_seconds`, never peaks, and we do not intend to add peak
+  extraction. What _is_ real is the cut lines, derived from the CUE
   `INDEX` values. The `.wtime` timecode row exists to keep that honest: it gives the cuts a
   visible time axis so they read as measured against the track times rather than implying the
   bars behind them are audio analysis. Do not remove `.wtime`, and do not treat the flat bars
   as a bug.
+- **The mobile drawer is off-canvas but still mounted**, so `inert` + `aria-hidden` (driven
+  by `useIsMobile`, never applied on desktop) is what keeps its search box and album rows out
+  of the tab order — CSS cannot express that, which is the only reason JS knows the 900px
+  breakpoint at all. Focus management (open → the drawer's first control, user-close → the
+  burger) keys on the open/close _transition_, never on the current state: `isMobile` is also
+  an effect dep, so a viewport flip with the drawer open would otherwise re-steal focus. The
+  resizer is keyboard-operable (arrows ±16px, Shift ±64px, Home/End) and carries
+  `role="separator"` + `aria-valuenow/min/max`. All of this has tests in `Shell.test.tsx`.
+- **Split state stays in `AlbumPanel`** — lifting `usePoll` would restart polling on unrelated
+  re-renders and break its `runToken` restart semantics. Only the slice the topbar dot and
+  tree progress need is lifted, as an `ActiveJob` summary via `onActiveJobChange`; `App` is
+  the only path upward because the panel reaches `Shell` as opaque `children`. The preview
+  refetch keys on `[item.path, cueFile, refreshToken, doneToken]` — the two counters exist for
+  the disk changes the first two deps cannot see (a rescan, and a finished split). `onJobDone`
+  is deliberately separate from `onActiveJobChange`, whose summary also nulls on album switch;
+  keying a rescan off that would re-scan on every click. Because `jobRun` outlives an album
+  switch, returning to a split album restores its job id and re-polls the same `done` — the
+  `signalledRun` latch is what stops that replaying the rescan.
 - **ESLint** (flat config, typescript-eslint) + **Prettier** (`eslint-config-prettier` last,
   so Prettier owns formatting): no semicolons, single quotes, 100-col. Run `npm run format`
   before committing; CI runs `lint` + `format:check` + `typecheck`.
