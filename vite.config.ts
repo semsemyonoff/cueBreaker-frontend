@@ -37,7 +37,13 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.{ts,tsx}', 'src/setupTests.ts', 'src/vite-env.d.ts'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/setupTests.ts',
+        'src/vite-env.d.ts',
+        // Bootstrap only; no test mounts it, so it is permanently uncovered.
+        'src/main.tsx',
+      ],
     },
   },
 })
