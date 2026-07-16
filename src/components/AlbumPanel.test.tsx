@@ -235,6 +235,204 @@ describe('AlbumPanel', () => {
     expect(screen.getByText('Split again (2 in output)')).toBeInTheDocument()
   })
 
+  it('refetches the preview once a job completes, so output state is not left stale', async () => {
+    const track = {
+      number: 1,
+      title: 'One',
+      performer: 'Artist',
+      index: '00:00:00',
+      start_seconds: 0,
+    }
+    const base = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      total_seconds: 60,
+      tracks: [track],
+    }
+    let previewCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') {
+          previewCalls += 1
+          // The split writes to /output between the first and second call.
+          return Promise.resolve(
+            jsonResponse(
+              previewCalls === 1
+                ? { ...base, split_done: false, output_tracks: 0 }
+                : { ...base, split_done: true, output_tracks: 1 }
+            )
+          )
+        }
+        if (url === '/api/split')
+          return Promise.resolve(jsonResponse({ job_id: 'job-1', status: 'queued' }, 202))
+        if (url === '/api/status/job-1') {
+          return Promise.resolve(
+            jsonResponse({
+              status: 'done',
+              message: 'Split complete',
+              result_files: ['01 - One.flac'],
+              progress_current: 1,
+              progress_total: 1,
+              progress_detail: 'Complete',
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    render(<AlbumPanel item={item} />)
+
+    fireEvent.click(await screen.findByText('Split 1 tracks'))
+    await screen.findByText('Split completed successfully')
+
+    await vi.waitFor(() => expect(previewCalls).toBe(2))
+    // The refetched preview is swapped in place — the panel must not flash back to Loading…
+    expect(screen.getByText('Split completed successfully')).toBeInTheDocument()
+  })
+
+  it('refetches the preview when the owner bumps refreshToken', async () => {
+    const track = {
+      number: 1,
+      title: 'One',
+      performer: 'Artist',
+      index: '00:00:00',
+      start_seconds: 0,
+    }
+    const base = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      total_seconds: 60,
+      tracks: [track],
+    }
+    let previewCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') {
+          previewCalls += 1
+          return Promise.resolve(
+            jsonResponse(
+              previewCalls === 1
+                ? { ...base, split_done: false, output_tracks: 0 }
+                : { ...base, split_done: true, output_tracks: 2 }
+            )
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const { rerender } = render(<AlbumPanel item={item} refreshToken={0} />)
+    expect(await screen.findByText('Split 1 tracks')).toBeInTheDocument()
+
+    rerender(<AlbumPanel item={item} refreshToken={1} />)
+
+    expect(await screen.findByText('Output already exists')).toBeInTheDocument()
+    expect(screen.getByText('Split again (2 in output)')).toBeInTheDocument()
+  })
+
+  it('keeps a still-valid CUE selection when the cue list is handed back by a rescan', async () => {
+    stubPreview({
+      'a.cue': {
+        performer: 'Artist',
+        title: 'A',
+        file: 'a.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: false,
+        output_tracks: 0,
+        total_seconds: 60,
+        tracks: [
+          { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      },
+      'b.cue': {
+        performer: 'Artist',
+        title: 'B',
+        file: 'b.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: false,
+        output_tracks: 0,
+        total_seconds: 60,
+        tracks: [
+          { number: 1, title: 'Uno', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      },
+    })
+
+    const multiCue: ScanPair = { ...item, cue_files: ['a.cue', 'b.cue'] }
+    const { rerender } = render(<AlbumPanel item={multiCue} />)
+
+    const select = (await screen.findByLabelText('CUE file')) as HTMLSelectElement
+    select.value = 'b.cue'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(await screen.findByText('B')).toBeInTheDocument()
+
+    // A rescan returns an equal-but-new ScanPair; the chosen CUE must survive it.
+    rerender(<AlbumPanel item={{ ...multiCue, cue_files: ['a.cue', 'b.cue'] }} />)
+
+    expect(await screen.findByText('B')).toBeInTheDocument()
+  })
+
+  it('falls back to the first CUE when a rescan drops the selected one', async () => {
+    stubPreview({
+      'a.cue': {
+        performer: 'Artist',
+        title: 'A',
+        file: 'a.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: false,
+        output_tracks: 0,
+        total_seconds: 60,
+        tracks: [
+          { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      },
+      'b.cue': {
+        performer: 'Artist',
+        title: 'B',
+        file: 'b.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: false,
+        output_tracks: 0,
+        total_seconds: 60,
+        tracks: [
+          { number: 1, title: 'Uno', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      },
+    })
+
+    const multiCue: ScanPair = { ...item, cue_files: ['a.cue', 'b.cue'] }
+    const { rerender } = render(<AlbumPanel item={multiCue} />)
+
+    const select = (await screen.findByLabelText('CUE file')) as HTMLSelectElement
+    select.value = 'b.cue'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(await screen.findByText('B')).toBeInTheDocument()
+
+    rerender(<AlbumPanel item={{ ...multiCue, cue_files: ['a.cue'] }} />)
+
+    expect(await screen.findByText('A')).toBeInTheDocument()
+    expect(screen.queryByLabelText('CUE file')).toBeNull()
+  })
+
   it('shows a retry option when the split request itself fails', async () => {
     vi.stubGlobal(
       'fetch',

@@ -38,6 +38,13 @@ export interface Preview {
 
 export type JobStatusValue = 'queued' | 'splitting' | 'tagging' | 'done' | 'error'
 
+/** Statuses a job is still running in — i.e. every value that is not terminal (`done`/`error`). */
+export const ACTIVE_STATUSES: ReadonlySet<JobStatusValue> = new Set<JobStatusValue>([
+  'queued',
+  'splitting',
+  'tagging',
+])
+
 /** GET /api/status/{job_id} response. */
 export interface JobStatus {
   status: JobStatusValue

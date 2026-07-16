@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import * as api from '../api/client'
+import { ACTIVE_STATUSES } from '../api/types'
 import type { Preview, ScanPair } from '../api/types'
 import { usePoll } from '../split/usePoll'
 import CueSelector from './CueSelector'
@@ -11,9 +12,9 @@ import '../styles/states.css'
 
 export interface AlbumPanelProps {
   item: ScanPair
+  /** Bumped by the owner (on rescan) to refetch the preview; see the preview effect. */
+  refreshToken?: number
 }
-
-const ACTIVE_STATUSES = new Set(['queued', 'splitting', 'tagging'])
 
 interface Breadcrumb {
   parents: string[]
@@ -25,17 +26,23 @@ function breadcrumb(path: string): Breadcrumb {
   return { parents: parts.slice(0, -1), leaf: parts[parts.length - 1] ?? path }
 }
 
-export default function AlbumPanel({ item }: AlbumPanelProps) {
+export default function AlbumPanel({ item, refreshToken = 0 }: AlbumPanelProps) {
   const [cueFile, setCueFile] = useState(item.cue_files[0] ?? '')
   const [preview, setPreview] = useState<Preview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hoveredTrack, setHoveredTrack] = useState<number | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [runToken, setRunToken] = useState(0)
+  const [doneToken, setDoneToken] = useState(0)
   const [splitError, setSplitError] = useState<string | null>(null)
 
+  // Keep the selection when a rescan hands back a cue list that still contains it
+  // (`cue_files` is a fresh array on every scan); fall back to the first entry
+  // when the selected CUE is gone, so we never preview a file that no longer exists.
   useEffect(() => {
-    setCueFile(item.cue_files[0] ?? '')
+    setCueFile((current) =>
+      item.cue_files.includes(current) ? current : (item.cue_files[0] ?? '')
+    )
   }, [item.path, item.cue_files])
 
   useEffect(() => {
@@ -43,11 +50,18 @@ export default function AlbumPanel({ item }: AlbumPanelProps) {
     setSplitError(null)
   }, [item.path, cueFile])
 
+  // Clearing is keyed on identity only: a refetch of the *same* album/CUE should
+  // swap the data in place rather than flash the panel back to `Loading…`.
+  useEffect(() => {
+    setPreview(null)
+    setError(null)
+  }, [item.path, cueFile])
+
+  // `refreshToken`/`doneToken` cover the changes to disk state that leave both
+  // `path` and `cueFile` untouched: a rescan, and a split job finishing.
   useEffect(() => {
     if (!cueFile) return
     let cancelled = false
-    setPreview(null)
-    setError(null)
     api
       .preview(item.path, cueFile)
       .then((result) => {
@@ -59,9 +73,16 @@ export default function AlbumPanel({ item }: AlbumPanelProps) {
     return () => {
       cancelled = true
     }
-  }, [item.path, cueFile])
+  }, [item.path, cueFile, refreshToken, doneToken])
 
   const poll = usePoll(jobId, runToken)
+  const jobStatus = poll.job?.status
+
+  // A completed job is the one event that writes to `/output` without changing
+  // the preview effect's keys — `split_done`/`output_tracks` would stay stale.
+  useEffect(() => {
+    if (jobStatus === 'done') setDoneToken((n) => n + 1)
+  }, [jobStatus])
 
   async function handleSplit() {
     setSplitError(null)
@@ -184,7 +205,7 @@ export default function AlbumPanel({ item }: AlbumPanelProps) {
       />
       <SplitAction
         trackCount={preview.tracks.length}
-        splitDone={preview.split_done}
+        splitDone={splitDone}
         outputTracks={preview.output_tracks}
         job={job}
         error={fetchError}

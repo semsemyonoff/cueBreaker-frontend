@@ -1,3 +1,4 @@
+import { ACTIVE_STATUSES } from '../api/types'
 import type { JobStatus } from '../api/types'
 
 export interface SplitActionProps {
@@ -8,8 +9,6 @@ export interface SplitActionProps {
   error: string | null
   onSplit: () => void
 }
-
-const ACTIVE_STATUSES = new Set(['queued', 'splitting', 'tagging'])
 
 /** Split button + results/error/overwrite-warning states below the track table. */
 export default function SplitAction({

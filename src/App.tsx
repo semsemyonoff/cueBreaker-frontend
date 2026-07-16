@@ -13,6 +13,7 @@ export default function App() {
   const [version, setVersion] = useState('')
   const [scanning, setScanning] = useState(true)
   const [scanError, setScanError] = useState<string | null>(null)
+  const [refreshToken, setRefreshToken] = useState(0)
 
   const rescan = useCallback(() => {
     setScanning(true)
@@ -21,6 +22,14 @@ export default function App() {
       .then((next) => {
         setItems(next)
         setScanError(null)
+        // The open panel reads `cue_files` off its ScanPair, so a rescan has to
+        // hand it the fresh object — and drop the selection when the album is gone,
+        // rather than render a panel for an album that no longer exists.
+        setSelected((current) =>
+          current === null ? null : (next.find((pair) => pair.path === current.path) ?? null)
+        )
+        // A rescan also means disk state may have moved under the panel's preview.
+        setRefreshToken((n) => n + 1)
       })
       .catch((err: unknown) => {
         // A failed scan must not look like a successful empty one: keep the last
@@ -46,7 +55,7 @@ export default function App() {
     // render AlbumPanel and the error would never surface.
     content = <ScanError message={scanError} onRetry={rescan} />
   } else if (selected) {
-    content = <AlbumPanel item={selected} />
+    content = <AlbumPanel item={selected} refreshToken={refreshToken} />
   } else if (items.length === 0) {
     content = <EmptyScan onRescan={rescan} />
   } else {
