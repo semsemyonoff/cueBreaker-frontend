@@ -11,7 +11,7 @@
   align-items: center;
   gap: 14px;
   padding: 0 22px;
-  height: 56px;
+  height: var(--topbar-h);
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   background: var(--bg2);
@@ -103,6 +103,9 @@
   display: flex;
   flex: 1;
   min-height: 0;
+  /* Containing block for the mobile drawer and scrim, which are absolutely
+     positioned: without this they resolve against the viewport. */
+  position: relative;
 }
 
 .sidewrap {
@@ -321,28 +324,40 @@
     display: none;
   }
 
+  .dbody {
+    --drawer-w: min(78vw, 340px);
+  }
+
   .sidewrap {
     position: absolute;
-    inset: 56px 0 0 0;
-    width: 78vw;
-    max-width: 340px;
+    inset: 0;
+    width: var(--drawer-w);
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     z-index: 2;
   }
 
+  .sidewrap .side {
+    border-right-color: var(--border2);
+  }
+
+  /* Only while open: at translateX(-100%) the shadow would spill 60px of blur
+     back across the left edge of the work area, with no scrim to hide it. */
   .sidewrap.drawer-open {
     transform: translateX(0);
+    box-shadow: 24px 0 60px rgba(0, 0, 0, 0.5);
   }
 
   .resizer {
     display: none;
   }
 
+  /* Starts where the drawer ends, so the hit area is exactly the dimmed
+     region rather than a full-width layer sliding under the drawer. */
   .scrim {
     display: block;
     position: absolute;
-    inset: 56px 0 0 0;
+    inset: 0 0 0 var(--drawer-w);
     background: rgba(6, 9, 16, 0.55);
     z-index: 1;
   }
