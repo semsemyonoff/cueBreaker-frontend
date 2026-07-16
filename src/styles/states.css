@@ -177,6 +177,15 @@
   color: #c9a86a;
 }
 
+/* The errbox's default top margin assumes it follows the track table; inside the
+   centred emptybox it stands alone. */
+.errbox.scanerror {
+  margin-top: 0;
+  width: 100%;
+  max-width: 520px;
+  text-align: left;
+}
+
 .emptybox {
   flex: 1;
   display: flex;

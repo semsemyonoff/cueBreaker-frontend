@@ -3,7 +3,7 @@ import * as api from './api/client'
 import type { ScanPair } from './api/types'
 import AlbumPanel from './components/AlbumPanel'
 import Shell from './components/Shell'
-import { EmptyScan, ScanningLibrary } from './components/States'
+import { EmptyScan, ScanError, ScanningLibrary } from './components/States'
 import './styles/shell.css'
 import './styles/states.css'
 
@@ -12,13 +12,21 @@ export default function App() {
   const [selected, setSelected] = useState<ScanPair | null>(null)
   const [version, setVersion] = useState('')
   const [scanning, setScanning] = useState(true)
+  const [scanError, setScanError] = useState<string | null>(null)
 
   const rescan = useCallback(() => {
     setScanning(true)
     api
       .scan()
-      .then(setItems)
-      .catch(() => setItems([]))
+      .then((next) => {
+        setItems(next)
+        setScanError(null)
+      })
+      .catch((err: unknown) => {
+        // A failed scan must not look like a successful empty one: keep the last
+        // known items and report the failure instead of silently emptying.
+        setScanError(err instanceof Error ? err.message : 'library scan failed')
+      })
       .finally(() => setScanning(false))
   }, [])
 
@@ -33,6 +41,10 @@ export default function App() {
   let content
   if (scanning) {
     content = <ScanningLibrary />
+  } else if (scanError) {
+    // Must precede `selected`: a failed rescan with an album open would otherwise
+    // render AlbumPanel and the error would never surface.
+    content = <ScanError message={scanError} onRetry={rescan} />
   } else if (selected) {
     content = <AlbumPanel item={selected} />
   } else if (items.length === 0) {
