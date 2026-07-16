@@ -316,6 +316,21 @@
 
 /* Mobile: sidebar becomes an off-canvas drawer */
 @media (max-width: 900px) {
+  /* Condensed topbar per proto:125, 369-370. The 52px height rides on
+     --topbar-h, overridden in tokens.css where the token is declared. */
+  .dtop {
+    padding: 0 16px;
+  }
+
+  .blogo {
+    width: 24px;
+    height: 24px;
+  }
+
+  .word {
+    font-size: 16px;
+  }
+
   .burger {
     display: flex;
   }

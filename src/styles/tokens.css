@@ -23,3 +23,12 @@
   --font-ui: 'Manrope', sans-serif;
   --mono: 'JetBrains Mono', monospace;
 }
+
+/* The mobile override lives here, beside the declaration: tokens.css loads after
+   shell.css, so a `:root` override there would lose to the base value on source
+   order (equal specificity). proto:125. */
+@media (max-width: 900px) {
+  :root {
+    --topbar-h: 52px;
+  }
+}

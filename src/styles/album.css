@@ -254,3 +254,68 @@
   text-align: right;
   width: 96px;
 }
+
+/* Mobile: condensed album header and a 3-column track table (proto:376-398) */
+@media (max-width: 900px) {
+  /* The prototype puts the chips *below* the header block, while the impl nests
+     them inside `.ameta` alongside the title. `display: contents` lifts `.ameta`'s
+     children into `.ahead`'s grid so the areas below can place them per proto:376-386
+     without touching AlbumPanel's markup. */
+  .ahead {
+    display: grid;
+    grid-template-columns: 82px 1fr;
+    grid-template-areas:
+      'cover title'
+      'cover artist'
+      'cover pill'
+      'chips chips';
+    column-gap: 14px;
+  }
+
+  .ameta {
+    display: contents;
+  }
+
+  .cover {
+    grid-area: cover;
+    align-self: start;
+    width: 82px;
+    height: 82px;
+    border-radius: 11px;
+  }
+
+  .atitle {
+    grid-area: title;
+    font-size: 19px;
+    letter-spacing: -0.4px;
+    line-height: 1.15;
+    margin-bottom: 0;
+  }
+
+  .aartist {
+    grid-area: artist;
+    font-size: 13px;
+    margin: 3px 0 0;
+  }
+
+  .metarow {
+    grid-area: pill;
+    margin-top: 9px;
+  }
+
+  .chips {
+    grid-area: chips;
+    margin: 16px 0 0;
+  }
+
+  .wavewrap {
+    padding: 22px 16px 16px;
+  }
+
+  /* Artist column: 4 columns do not fit 390px, and the performer is already in
+     the header for the single-artist albums this tool targets (proto:391-398). */
+  .ttable th:nth-child(3),
+  .ttable .ta {
+    display: none;
+  }
+}
