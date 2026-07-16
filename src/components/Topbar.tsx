@@ -18,7 +18,7 @@ export default function Topbar({ version, albumCount, unsplitCount, onBurgerClic
         <div className="word">
           cue<span>Breaker</span>
         </div>
-        <span className="ver">v{version}</span>
+        {version && <span className="ver">v{version}</span>}
       </div>
       <div className="tstat">
         <span className="dot" />
