@@ -109,6 +109,37 @@
   color: var(--dim2);
 }
 
+/* Mobile: the actionbar becomes the prototype's sticky `.m-splitbar` (proto:136-137,
+   400) — the primary CTA must not sit below a full track table on a 390px screen.
+   Absolute against `.dbody` (positioned since the drawer fix), not against `.work`:
+   the containing block is outside the scroller, so the bar stays pinned while the
+   panel scrolls under it, and `.work`'s bottom padding reserves its space. z-index
+   stays auto so the scrim (1) and drawer (2) still paint over it. */
+@media (max-width: 900px) {
+  .actionbar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin-top: 0;
+    gap: 0;
+    flex-wrap: nowrap;
+    padding: 14px 16px;
+    background: linear-gradient(180deg, rgba(15, 17, 27, 0), var(--bg) 34%);
+  }
+
+  .actionbar button {
+    flex: 1;
+    justify-content: center;
+    height: 50px;
+  }
+
+  /* Redundant beside a full-width button, and it would break the bar's geometry. */
+  .actionhint {
+    display: none;
+  }
+}
+
 .results {
   margin-top: 22px;
   padding: 16px 18px;

@@ -362,7 +362,9 @@
     z-index: 1;
   }
 
+  /* The bottom padding reserves the sticky split bar's strip (states.css), so the
+     last track row can always be scrolled clear of it. */
   .work {
-    padding: 18px 16px;
+    padding: 18px 16px 90px;
   }
 }
