@@ -49,6 +49,29 @@ describe('cutPositions', () => {
     expect(cutPositions(tracks, -5)).toEqual([])
   })
 
+  it('returns no cut-lines when total_seconds is non-finite', () => {
+    const tracks = [track(1, 0), track(2, 10), track(3, 50)]
+
+    expect(cutPositions(tracks, NaN)).toEqual([])
+    expect(cutPositions(tracks, Infinity)).toEqual([])
+    expect(cutPositions(tracks, -Infinity)).toEqual([])
+  })
+
+  it('skips a track whose own start_seconds is non-finite', () => {
+    expect(cutPositions([track(2, NaN)], 100)).toEqual([])
+    expect(cutPositions([track(1, 0), track(2, NaN), track(3, 50)], 100)).toEqual([
+      { trackNumber: 3, leftPercent: 50 },
+    ])
+  })
+
+  it('never emits a non-finite leftPercent', () => {
+    const tracks = [track(2, Infinity), track(3, 25)]
+
+    for (const cut of cutPositions(tracks, 100)) {
+      expect(Number.isFinite(cut.leftPercent)).toBe(true)
+    }
+  })
+
   it('returns no cut-lines for a single unsplit track', () => {
     expect(cutPositions([track(1, 0)], 100)).toEqual([])
   })
@@ -66,6 +89,19 @@ describe('fillState', () => {
   it('clamps progress below 0 and above 100', () => {
     expect(fillState(-10).fillPercent).toBe(0)
     expect(fillState(150).fillPercent).toBe(100)
+  })
+
+  it('collapses a NaN progress to 0 rather than emitting NaN%', () => {
+    expect(fillState(NaN)).toEqual({
+      fillPercent: 0,
+      clipPath: 'inset(0 100% 0 0)',
+      playheadLeft: '0%',
+    })
+  })
+
+  it('clamps an infinite progress to the 0-100 bounds', () => {
+    expect(fillState(Infinity).fillPercent).toBe(100)
+    expect(fillState(-Infinity).fillPercent).toBe(0)
   })
 
   it('fully reveals the fill layer and parks the playhead at 100 when done', () => {

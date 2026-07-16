@@ -28,22 +28,26 @@ export interface CutPosition {
   leftPercent: number
 }
 
+/** NaN survives Math.min/max, so it is folded to 0 before clamping; ±Infinity clamps normally. */
 function clampPercent(value: number): number {
+  if (Number.isNaN(value)) return 0
   return Math.min(100, Math.max(0, value))
 }
 
 /**
  * Cut-line positions (`left%`) for tracks with a real `start_seconds > 0`.
  * Track 1 always starts at 0 and is intentionally skipped (the prototype
- * labels cuts from `02`); an unreadable `totalSeconds` (`<= 0`) yields no
- * cut-lines at all rather than bunching everything at the left edge.
+ * labels cuts from `02`); an unreadable `totalSeconds` — non-finite, or
+ * `<= 0` — yields no cut-lines at all rather than bunching everything at the
+ * left edge. A track whose own `start_seconds` is unreadable is skipped the
+ * same way.
  */
 export function cutPositions(tracks: Track[], totalSeconds: number): CutPosition[] {
-  if (totalSeconds <= 0) return []
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return []
 
   const positions: CutPosition[] = []
   for (const track of tracks) {
-    if (track.start_seconds <= 0) continue
+    if (!Number.isFinite(track.start_seconds) || track.start_seconds <= 0) continue
     positions.push({
       trackNumber: track.number,
       leftPercent: clampPercent((track.start_seconds / totalSeconds) * 100),
@@ -61,7 +65,10 @@ export interface FillState {
   playheadLeft: string
 }
 
-/** Derives the fill clip-path + playhead position for a given progress percent. */
+/**
+ * Derives the fill clip-path + playhead position for a given progress percent.
+ * A `NaN` progress collapses to 0 rather than emitting `NaN%`.
+ */
 export function fillState(progress: number): FillState {
   const fillPercent = clampPercent(progress)
   return {
