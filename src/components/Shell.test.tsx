@@ -71,6 +71,59 @@ describe('Shell mobile drawer', () => {
   })
 })
 
+describe('Shell resizer keyboard a11y', () => {
+  it('advertises the current width and its bounds', () => {
+    const { container } = renderShell()
+    const resizer = container.querySelector('.resizer')!
+
+    expect(resizer).toHaveAttribute('tabindex', '0')
+    expect(resizer).toHaveAttribute('aria-valuenow', '300')
+    expect(resizer).toHaveAttribute('aria-valuemin', '220')
+    expect(resizer).toHaveAttribute('aria-valuemax', '480')
+  })
+
+  it('resizes with the arrow keys', () => {
+    const { container } = renderShell()
+    const resizer = container.querySelector('.resizer')!
+    const sidewrap = container.querySelector('.sidewrap') as HTMLElement
+
+    fireEvent.keyDown(resizer, { key: 'ArrowRight' })
+    expect(resizer).toHaveAttribute('aria-valuenow', '316')
+    expect(sidewrap.style.getPropertyValue('--sidebar-w')).toBe('316px')
+
+    fireEvent.keyDown(resizer, { key: 'ArrowLeft' })
+    expect(resizer).toHaveAttribute('aria-valuenow', '300')
+
+    fireEvent.keyDown(resizer, { key: 'ArrowRight', shiftKey: true })
+    expect(resizer).toHaveAttribute('aria-valuenow', '364')
+  })
+
+  it('clamps at the 220/480 bounds', () => {
+    const { container } = renderShell()
+    const resizer = container.querySelector('.resizer')!
+
+    for (let i = 0; i < 20; i++) fireEvent.keyDown(resizer, { key: 'ArrowLeft', shiftKey: true })
+    expect(resizer).toHaveAttribute('aria-valuenow', '220')
+
+    for (let i = 0; i < 20; i++) fireEvent.keyDown(resizer, { key: 'ArrowRight', shiftKey: true })
+    expect(resizer).toHaveAttribute('aria-valuenow', '480')
+  })
+
+  it('jumps to the bounds with Home and End, and ignores other keys', () => {
+    const { container } = renderShell()
+    const resizer = container.querySelector('.resizer')!
+
+    fireEvent.keyDown(resizer, { key: 'End' })
+    expect(resizer).toHaveAttribute('aria-valuenow', '480')
+
+    fireEvent.keyDown(resizer, { key: 'Home' })
+    expect(resizer).toHaveAttribute('aria-valuenow', '220')
+
+    fireEvent.keyDown(resizer, { key: 'a' })
+    expect(resizer).toHaveAttribute('aria-valuenow', '220')
+  })
+})
+
 describe('Shell drawer a11y', () => {
   it('reflects the drawer state in the burger aria-expanded', () => {
     renderShell()

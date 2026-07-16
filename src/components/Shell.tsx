@@ -3,16 +3,26 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
 import type { ScanPair } from '../api/types'
-import { clampWidth, loadWidth, saveWidth } from '../ui/resizer'
+import {
+  MAX_SIDEBAR_WIDTH,
+  MIN_SIDEBAR_WIDTH,
+  clampWidth,
+  loadWidth,
+  saveWidth,
+} from '../ui/resizer'
 import { useIsMobile } from '../ui/useIsMobile'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 
 const DRAWER_ID = 'library-drawer'
+/** Width in px one arrow key press moves the resizer; Shift multiplies it. */
+const RESIZE_STEP = 16
+const RESIZE_STEP_LARGE = 64
 
 export interface ShellProps {
   items: ScanPair[]
@@ -81,6 +91,21 @@ export default function Shell({
     dragCleanup.current = stopResize
   }
 
+  function resizeOnKey(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? RESIZE_STEP_LARGE : RESIZE_STEP
+    const next: Record<string, (width: number) => number> = {
+      ArrowLeft: (width) => width - step,
+      ArrowRight: (width) => width + step,
+      Home: () => MIN_SIDEBAR_WIDTH,
+      End: () => MAX_SIDEBAR_WIDTH,
+    }
+    const move = next[event.key]
+    if (!move) return
+
+    event.preventDefault()
+    setSidebarWidth((width) => clampWidth(move(width)))
+  }
+
   useEffect(() => {
     saveWidth(sidebarWidth)
   }, [sidebarWidth])
@@ -141,8 +166,14 @@ export default function Shell({
           <div
             className="resizer"
             role="separator"
+            tabIndex={0}
             aria-orientation="vertical"
+            aria-label="Resize library"
+            aria-valuenow={sidebarWidth}
+            aria-valuemin={MIN_SIDEBAR_WIDTH}
+            aria-valuemax={MAX_SIDEBAR_WIDTH}
             onPointerDown={startResize}
+            onKeyDown={resizeOnKey}
           />
         </div>
         {drawerOpen && <div className="scrim" onClick={closeDrawer} />}

@@ -103,6 +103,7 @@ function FolderRow({
         className="tfolder"
         role="button"
         tabIndex={0}
+        aria-expanded={isOpen}
         onClick={toggleThis}
         onKeyDown={activateOnKey(toggleThis)}
       >
