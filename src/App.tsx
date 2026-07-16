@@ -75,7 +75,14 @@ export default function App() {
   }, [rescan])
 
   let content
-  if (scanning) {
+  if (scanning && selected === null) {
+    // Gated on `selected`, so the spinner only ever covers the initial load and a
+    // rescan with nothing open. A rescan *with* an album open must leave the panel
+    // mounted: unmounting it discards `jobRun`/`runToken` and stops `usePoll`, so a
+    // split running behind a mid-split Rescan would never be polled again — no
+    // progress, no `onJobDone`, and the Split button back to idle while the backend
+    // works on. It is also what makes `refreshToken` reach a live panel at all;
+    // remounting would refetch anyway and the prop would be dead code.
     content = <ScanningLibrary />
   } else if (scanError) {
     // Must precede `selected`: a failed rescan with an album open would otherwise

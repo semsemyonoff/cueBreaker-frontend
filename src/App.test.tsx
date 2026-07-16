@@ -251,6 +251,30 @@ describe('App', () => {
     expect(metas).toEqual(['50%', '1 cue'])
   })
 
+  it('keeps a running split tracked across a rescan that retains the album', async () => {
+    vi.stubGlobal('fetch', vi.fn(splittingBackend([album])))
+
+    const { container } = render(<App />)
+
+    fireEvent.click(await screen.findByText('Album'))
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+    await vi.waitFor(() =>
+      expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting1 unsplit')
+    )
+
+    // The scanning spinner must not unmount the panel out from under the job:
+    // that would discard its `jobRun` and stop `usePoll`, so the split would run
+    // on with nothing polling it — no progress, and no refresh on completion.
+    fireEvent.click(screen.getByRole('button', { name: 'Rescan' }))
+
+    expect(screen.queryByText('Scanning library…')).not.toBeInTheDocument()
+    await vi.waitFor(() =>
+      expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting1 unsplit')
+    )
+    expect(container.querySelector('.dot')?.className).toBe('dot run')
+    expect(container.querySelector('.tameta')?.textContent).toBe('50%')
+  })
+
   it('clears the topbar splitting state when the album is switched away', async () => {
     const other = { ...album, path: 'Other' }
     vi.stubGlobal('fetch', vi.fn(splittingBackend([album, other])))
