@@ -66,6 +66,63 @@ describe('AlbumPanel', () => {
     expect(screen.getByText('no cover')).toBeInTheDocument()
   })
 
+  it('renders the source line and the waveform timecode endpoints from preview data', async () => {
+    stubPreview({
+      'album.cue': {
+        performer: 'Artist',
+        title: 'Album',
+        file: 'Blue Meridian.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: false,
+        output_tracks: 0,
+        total_seconds: 3684,
+        tracks: [
+          { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      },
+    })
+
+    const { container } = render(<AlbumPanel item={item} />)
+
+    expect(await screen.findByText('Album')).toBeInTheDocument()
+    expect(container.querySelector('.srcline')?.textContent).toBe(
+      'source: Blue Meridian.flac · 61:24'
+    )
+    const wtime = container.querySelector('.wtime')
+    expect([...(wtime?.querySelectorAll('span') ?? [])].map((s) => s.textContent)).toEqual([
+      '00:00',
+      '61:24',
+    ])
+  })
+
+  it('drops the timecode row once the album is split (idle-state only, per the prototype)', async () => {
+    stubPreview({
+      'album.cue': {
+        performer: 'Artist',
+        title: 'Album',
+        file: 'album.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: true,
+        output_tracks: 1,
+        total_seconds: 3684,
+        tracks: [
+          { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      },
+    })
+
+    const { container } = render(<AlbumPanel item={item} />)
+
+    expect(await screen.findByText('Split')).toBeInTheDocument()
+    expect(container.querySelector('.wtime')).toBeNull()
+    // The source line is not idle-gated — it identifies the FLAC in every state.
+    expect(container.querySelector('.srcline')?.textContent).toBe('source: album.flac · 61:24')
+  })
+
   it('shows the done pill and cover image when split_done and has_cover are true', async () => {
     stubPreview({
       'album.cue': {

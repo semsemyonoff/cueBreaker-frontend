@@ -134,6 +134,14 @@
   height: 66px;
 }
 
+.wtime {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+  font: 500 11px var(--mono);
+  color: var(--dim2);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wave-fill,
   .wave-head {

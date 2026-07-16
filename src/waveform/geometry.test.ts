@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Track } from '../api/types'
-import { BAR_COUNT, barHeights, cutPositions, fillState } from './geometry'
+import { BAR_COUNT, barHeights, cutPositions, fillState, formatDuration } from './geometry'
 
 function track(number: number, start_seconds: number): Track {
   return { number, title: `Track ${number}`, performer: '', index: '00:00:00', start_seconds }
@@ -110,5 +110,28 @@ describe('fillState', () => {
       clipPath: 'inset(0 0% 0 0)',
       playheadLeft: '100%',
     })
+  })
+})
+
+describe('formatDuration', () => {
+  it('renders MM:SS zero-padded', () => {
+    expect(formatDuration(0)).toBe('00:00')
+    expect(formatDuration(9)).toBe('00:09')
+    expect(formatDuration(64)).toBe('01:04')
+  })
+
+  it('rolls hours into minutes rather than emitting an HH field', () => {
+    expect(formatDuration(3684)).toBe('61:24')
+    expect(formatDuration(3600)).toBe('60:00')
+  })
+
+  it('truncates fractional seconds instead of rounding up past the duration', () => {
+    expect(formatDuration(59.9)).toBe('00:59')
+  })
+
+  it('renders an unreadable duration as --:-- rather than a fabricated 00:00', () => {
+    expect(formatDuration(NaN)).toBe('--:--')
+    expect(formatDuration(Infinity)).toBe('--:--')
+    expect(formatDuration(-1)).toBe('--:--')
   })
 })

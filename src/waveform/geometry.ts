@@ -56,6 +56,21 @@ export function cutPositions(tracks: Track[], totalSeconds: number): CutPosition
   return positions
 }
 
+/**
+ * Seconds → `MM:SS`, hours rolling into minutes (the prototype writes a 61-minute
+ * album as `61:24`, not `1:01:24`). The prototype's `61:24:00` is MM:SS:FF, but
+ * `total_seconds` carries no frame data, so the frames field would have to be
+ * fabricated — we render MM:SS instead. A duration we cannot read — non-finite or
+ * negative — renders as `--:--` rather than a plausible-looking `00:00`.
+ */
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '--:--'
+  const whole = Math.floor(seconds)
+  const minutes = Math.floor(whole / 60)
+  const remainder = whole % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+}
+
 export interface FillState {
   /** Progress clamped to 0-100. */
   fillPercent: number

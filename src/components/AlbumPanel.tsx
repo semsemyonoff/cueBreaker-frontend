@@ -3,6 +3,7 @@ import * as api from '../api/client'
 import { ACTIVE_STATUSES } from '../api/types'
 import type { Preview, ScanPair } from '../api/types'
 import { usePoll } from '../split/usePoll'
+import { formatDuration } from '../waveform/geometry'
 import CueSelector from './CueSelector'
 import SplitAction from './SplitAction'
 import TrackTable from './TrackTable'
@@ -168,6 +169,9 @@ export default function AlbumPanel({ item, refreshToken = 0 }: AlbumPanelProps) 
               {pillLabel}
             </span>
             <CueSelector cueFiles={item.cue_files} value={cueFile} onChange={setCueFile} />
+            <span className="srcline">
+              <b>source:</b> {preview.file} · {formatDuration(preview.total_seconds)}
+            </span>
           </div>
         </div>
       </div>
@@ -184,6 +188,12 @@ export default function AlbumPanel({ item, refreshToken = 0 }: AlbumPanelProps) 
           hoveredTrack={hoveredTrack}
           onHoverTrack={setHoveredTrack}
         />
+        {variant === 'idle' && (
+          <div className="wtime">
+            <span>{formatDuration(0)}</span>
+            <span>{formatDuration(preview.total_seconds)}</span>
+          </div>
+        )}
         {active && job && (
           <div className="statusrow">
             <span className="sl">

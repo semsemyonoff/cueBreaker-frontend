@@ -104,6 +104,16 @@
   flex-wrap: wrap;
 }
 
+.srcline {
+  font: 500 12px var(--mono);
+  color: var(--dim2);
+}
+
+.srcline b {
+  color: var(--dim);
+  font-weight: 500;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
