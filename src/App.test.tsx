@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ScanPair } from './api/types'
+import type { ScanPair, ScanResult } from './api/types'
 import App from './App'
 
 function jsonResponse(body: unknown): Response {
@@ -8,6 +8,20 @@ function jsonResponse(body: unknown): Response {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+function scanResult(items: ScanPair[]): ScanResult {
+  return {
+    items,
+    log: [],
+    summary: {
+      dirs_walked: items.length,
+      albums: items.length,
+      unsplit: items.length,
+      skipped: 0,
+      elapsed_ms: 0,
+    },
+  }
 }
 
 function errorResponse(status: number, error: string): Response {
@@ -43,7 +57,7 @@ function splittingBackend(items: ScanPair[] | (() => ScanPair[])) {
   const scanned = typeof items === 'function' ? items : () => items
   return (url: string) => {
     if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-    if (url === '/api/scan') return Promise.resolve(jsonResponse(scanned()))
+    if (url === '/api/scan') return Promise.resolve(jsonResponse(scanResult(scanned())))
     if (url === '/api/preview') {
       return Promise.resolve(
         jsonResponse({
@@ -87,7 +101,7 @@ describe('App', () => {
       'fetch',
       vi.fn((url: string) => {
         if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-        return Promise.resolve(jsonResponse([]))
+        return Promise.resolve(jsonResponse(scanResult([])))
       })
     )
 
@@ -102,8 +116,8 @@ describe('App', () => {
       'fetch',
       vi.fn((url: string) => {
         if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-        if (url === '/api/scan') return Promise.resolve(jsonResponse([album]))
-        return Promise.resolve(jsonResponse([]))
+        if (url === '/api/scan') return Promise.resolve(jsonResponse(scanResult([album])))
+        return Promise.resolve(jsonResponse(scanResult([])))
       })
     )
 
@@ -133,7 +147,7 @@ describe('App', () => {
     const fetchMock = vi.fn((url: string) => {
       if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
       if (fail) return Promise.resolve(errorResponse(503, 'backend unavailable'))
-      return Promise.resolve(jsonResponse([]))
+      return Promise.resolve(jsonResponse(scanResult([])))
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -168,7 +182,7 @@ describe('App', () => {
       vi.fn((url: string, init?: RequestInit) => {
         if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
         if (url === '/api/scan')
-          return Promise.resolve(jsonResponse([{ ...album, cue_files: cueFiles }]))
+          return Promise.resolve(jsonResponse(scanResult([{ ...album, cue_files: cueFiles }])))
         if (url === '/api/preview' && init?.body) {
           const { cue_file: cue } = JSON.parse(String(init.body)) as { cue_file: string }
           return Promise.resolve(jsonResponse(previewFor(cue)))
@@ -198,7 +212,7 @@ describe('App', () => {
       'fetch',
       vi.fn((url: string) => {
         if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-        if (url === '/api/scan') return Promise.resolve(jsonResponse(items))
+        if (url === '/api/scan') return Promise.resolve(jsonResponse(scanResult(items)))
         if (url === '/api/preview') {
           return Promise.resolve(
             jsonResponse({
@@ -332,7 +346,7 @@ describe('App', () => {
     const scanned = () => [{ ...album, split_done: done, output_tracks: done ? 2 : 0 }]
     const fetchMock = vi.fn((url: string) => {
       if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-      if (url === '/api/scan') return Promise.resolve(jsonResponse(scanned()))
+      if (url === '/api/scan') return Promise.resolve(jsonResponse(scanResult(scanned())))
       if (url === '/api/preview') {
         return Promise.resolve(
           jsonResponse({

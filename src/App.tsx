@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as api from './api/client'
-import type { ActiveJob, ScanPair } from './api/types'
+import type { ActiveJob, LogEntry, ScanPair, ScanSummary } from './api/types'
 import AlbumPanel from './components/AlbumPanel'
 import Shell from './components/Shell'
 import { EmptyScan, ScanError, ScanningLibrary } from './components/States'
@@ -23,6 +23,12 @@ export default function App() {
   const [scanning, setScanning] = useState(true)
   const [scanError, setScanError] = useState<string | null>(null)
   const [refreshToken, setRefreshToken] = useState(0)
+  // Rendered by a later task (the sidebar footer log panel); kept in state now so
+  // the migration to the object scan shape lands in one place.
+  const [scanLog, setScanLog] = useState<LogEntry[]>([])
+  const [scanSummary, setScanSummary] = useState<ScanSummary | null>(null)
+  void scanLog
+  void scanSummary
   // AlbumPanel owns the polling; App is the only path from it to Shell, since the
   // panel is passed to Shell as opaque children.
   const [activeJob, setActiveJob] = useState<ActiveJob | null>(null)
@@ -31,14 +37,18 @@ export default function App() {
     setScanning(true)
     api
       .scan()
-      .then((next) => {
-        setItems(next)
+      .then((result) => {
+        setItems(result.items)
+        setScanLog(result.log)
+        setScanSummary(result.summary)
         setScanError(null)
         // The open panel reads `cue_files` off its ScanPair, so a rescan has to
         // hand it the fresh object — and drop the selection when the album is gone,
         // rather than render a panel for an album that no longer exists.
         setSelected((current) =>
-          current === null ? null : (next.find((pair) => pair.path === current.path) ?? null)
+          current === null
+            ? null
+            : (result.items.find((pair) => pair.path === current.path) ?? null)
         )
         // A rescan also means disk state may have moved under the panel's preview.
         setRefreshToken((n) => n + 1)
@@ -60,13 +70,17 @@ export default function App() {
   const refreshItems = useCallback(() => {
     api
       .scan()
-      .then((next) => {
-        setItems(next)
+      .then((result) => {
+        setItems(result.items)
+        setScanLog(result.log)
+        setScanSummary(result.summary)
         // Keep the current object when the album survives the scan but is somehow
         // absent from it: dropping the selection out from under a finished split
         // would be worse than briefly stale `cue_files`.
         setSelected((current) =>
-          current === null ? null : (next.find((pair) => pair.path === current.path) ?? current)
+          current === null
+            ? null
+            : (result.items.find((pair) => pair.path === current.path) ?? current)
         )
       })
       .catch(() => {

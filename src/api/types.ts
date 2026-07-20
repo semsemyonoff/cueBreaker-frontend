@@ -36,6 +36,32 @@ export interface Preview {
   total_seconds: number
 }
 
+export type LogLevel = 'info' | 'warn' | 'error'
+
+/** One entry in a joblog.Buffer, as returned on job status and scan responses. */
+export interface LogEntry {
+  seq: number
+  time: string
+  level: LogLevel
+  text: string
+}
+
+/** Counters closing out a GET /api/scan walk. */
+export interface ScanSummary {
+  dirs_walked: number
+  albums: number
+  unsplit: number
+  skipped: number
+  elapsed_ms: number
+}
+
+/** GET /api/scan response. */
+export interface ScanResult {
+  items: ScanPair[]
+  log: LogEntry[]
+  summary: ScanSummary
+}
+
 export type JobStatusValue = 'queued' | 'splitting' | 'tagging' | 'done' | 'error'
 
 /** Statuses a job is still running in — i.e. every value that is not terminal (`done`/`error`). */
@@ -76,6 +102,8 @@ export interface JobStatus {
   progress_current: number
   progress_total: number
   progress_detail: string
+  log: LogEntry[]
+  log_next: number
 }
 
 /** POST /api/split success response (202 Accepted). */

@@ -11,6 +11,8 @@ function job(overrides: Partial<JobStatus>): JobStatus {
     progress_current: 0,
     progress_total: 0,
     progress_detail: '',
+    log: [],
+    log_next: 0,
     ...overrides,
   }
 }

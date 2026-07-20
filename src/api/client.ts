@@ -1,4 +1,4 @@
-import type { JobStatus, Preview, ScanPair, SplitAccepted, Version } from './types'
+import type { JobStatus, Preview, ScanPair, ScanResult, SplitAccepted, Version } from './types'
 
 /** Thrown when the API responds with a non-2xx status. */
 export class ApiError extends Error {
@@ -38,8 +38,8 @@ function postJSON<T>(path: string, body: unknown): Promise<T> {
   })
 }
 
-export function scan(): Promise<ScanPair[]> {
-  return request<ScanPair[]>('/api/scan')
+export function scan(): Promise<ScanResult> {
+  return request<ScanResult>('/api/scan')
 }
 
 /**
@@ -60,8 +60,9 @@ export function split(path: string, cueFile: string): Promise<SplitAccepted> {
   return postJSON<SplitAccepted>('/api/split', { path, cue_file: cueFile })
 }
 
-export function status(jobId: string): Promise<JobStatus> {
-  return request<JobStatus>(`/api/status/${encodeJobPath(jobId)}`)
+export function status(jobId: string, since = 0): Promise<JobStatus> {
+  const query = since > 0 ? `?log_since=${since}` : ''
+  return request<JobStatus>(`/api/status/${encodeJobPath(jobId)}${query}`)
 }
 
 export function version(): Promise<Version> {
