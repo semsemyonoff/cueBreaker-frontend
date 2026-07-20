@@ -7,6 +7,7 @@ import { albumLeaf } from '../tree/buildTree'
 import { formatDuration } from '../waveform/geometry'
 import CueSelector from './CueSelector'
 import { ErrIcon } from './icons'
+import LogPanel from './LogPanel'
 import SplitAction from './SplitAction'
 import TrackTable from './TrackTable'
 import Waveform, { type WaveformVariant } from './Waveform'
@@ -129,6 +130,21 @@ export default function AlbumPanel({
   // treat that as no-longer-active so the UI surfaces the error and offers Retry.
   const active = poll.fetchError === null && job !== null && ACTIVE_STATUSES.has(job.status)
   const jobStatus = job?.status
+
+  const [logOpen, setLogOpen] = useState(false)
+  // Tracks whether the user has manually closed/opened the log this run, so the
+  // auto-expand effect below does not re-open a panel they just closed on the next
+  // poll tick. Reset alongside the run itself, or closing one failed run's log
+  // would silently disable auto-expand for every later failure in the session.
+  const userToggled = useRef(false)
+
+  useEffect(() => {
+    userToggled.current = false
+  }, [item.path, cueFile, runToken])
+
+  useEffect(() => {
+    if (jobStatus === 'error' && !userToggled.current) setLogOpen(true)
+  }, [jobStatus])
 
   // Held in a ref so the completion effect can key on the status transition alone:
   // a caller that re-creates the callback must not re-fire the signal (and the
@@ -354,6 +370,16 @@ export default function AlbumPanel({
         job={job}
         error={fetchError}
         onSplit={handleSplit}
+      />
+      <LogPanel
+        entries={poll.log}
+        label="Split log"
+        summary={`${poll.log.length} line${poll.log.length === 1 ? '' : 's'}`}
+        open={logOpen}
+        onToggle={(next) => {
+          userToggled.current = true
+          setLogOpen(next)
+        }}
       />
     </div>
   )
