@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as api from '../api/client'
 import { ACTIVE_STATUSES, progressPercent } from '../api/types'
-import type { ActiveJob, Preview, ScanPair } from '../api/types'
+import type { ActiveJob, JobStatusValue, Preview, ScanPair } from '../api/types'
 import { usePoll } from '../split/usePoll'
 import { albumLeaf } from '../tree/buildTree'
 import { formatDuration } from '../waveform/geometry'
@@ -32,6 +32,15 @@ interface Breadcrumb {
   leaf: string
 }
 
+// A restore response is only trusted when it actually looks like a JobStatus — the
+// test suite's fetch stubs commonly answer unmatched routes with a bare `{}`, and a
+// real backend fed a job id it never enqueued 404s instead of returning this shape.
+const KNOWN_STATUSES: ReadonlySet<JobStatusValue> = new Set<JobStatusValue>([
+  ...ACTIVE_STATUSES,
+  'done',
+  'error',
+])
+
 function breadcrumb(path: string): Breadcrumb {
   const parts = path.split('/').filter(Boolean)
   return { parents: parts.slice(0, -1), leaf: albumLeaf(path) }
@@ -48,6 +57,11 @@ export default function AlbumPanel({
   const [error, setError] = useState<string | null>(null)
   const [hoveredTrack, setHoveredTrack] = useState<number | null>(null)
   const [jobRun, setJobRun] = useState<{ id: string; key: string } | null>(null)
+  // Mirrors `jobRun` for the restore effect below: that effect's `.then` closes over
+  // the `jobRun` from the render that started it (mount, so always `null`), and a slow
+  // restore must still see a split the user started in the meantime.
+  const jobRunRef = useRef(jobRun)
+  jobRunRef.current = jobRun
   const [runToken, setRunToken] = useState(0)
   const [doneToken, setDoneToken] = useState(0)
   const [splitError, setSplitError] = useState<string | null>(null)
@@ -129,6 +143,48 @@ export default function AlbumPanel({
   // preview on every visit. Keyed on `runToken` too: a split-again re-runs the
   // same deterministic job ID and must be allowed to report its own completion.
   const signalledRun = useRef<string | null>(null)
+
+  // Restores a job across a page reload: job ids are deterministic (`path/cue_file`),
+  // so a plain GET can ask the backend whether one is already running or finished for
+  // this album/CUE without the user touching Split again.
+  useEffect(() => {
+    if (!cueFile) return
+    let cancelled = false
+    const restoreId = `${item.path}/${cueFile}`
+    const restoreKey = `${item.path}\u0000${cueFile}`
+    api
+      .status(restoreId)
+      .then((restored) => {
+        if (cancelled) return
+        // A split started while the restore request was in flight wins — this check
+        // must read the ref, not `jobRun`, since the closure above always sees the
+        // `null` it captured at mount.
+        if (jobRunRef.current !== null) return
+        if (!KNOWN_STATUSES.has(restored.status)) return
+        if (!ACTIVE_STATUSES.has(restored.status)) {
+          // Pre-arm the latch before `setJobRun` so the completion effect below sees
+          // this run as already signalled and does not re-fire `onJobDone` — a click
+          // on an already-split album must not trigger a library rescan.
+          signalledRun.current = `${runToken}:${restoreId}`
+        }
+        setJobRun({ id: restoreId, key: restoreKey })
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        if (err instanceof api.ApiError && err.status === 404) return
+        // Non-fatal: leave the panel in its idle state rather than surfacing a
+        // background restore failure as if it were a preview or split error.
+      })
+    return () => {
+      cancelled = true
+    }
+    // `runToken` is deliberately excluded: this is a one-shot restore per album/CUE,
+    // and re-running it on every split (runToken bump) would re-probe a job the panel
+    // just created itself. The `runToken` this effect reads inside `.then` is only
+    // ever consulted while `jobRunRef.current` is still `null`, i.e. before any split
+    // has bumped it — so the value captured at mount remains correct there.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.path, cueFile])
 
   // A completed job is the one event that writes to `/output` without changing
   // the preview effect's keys — `split_done`/`output_tracks` would stay stale.
