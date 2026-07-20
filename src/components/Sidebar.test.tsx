@@ -132,4 +132,16 @@ describe('Sidebar rescan', () => {
 
     expect(onRescan).toHaveBeenCalledOnce()
   })
+
+  it('marks the button busy and swallows clicks while a scan is in flight', () => {
+    const { onRescan } = renderSidebar({ scanning: true })
+    const button = screen.getByRole('button', { name: 'Rescan' })
+
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('aria-busy', 'true')
+
+    fireEvent.click(button)
+
+    expect(onRescan).not.toHaveBeenCalled()
+  })
 })

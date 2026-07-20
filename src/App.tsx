@@ -116,6 +116,7 @@ export default function App() {
       selectedPath={selected?.path ?? null}
       onSelect={setSelected}
       onRescan={rescan}
+      scanning={scanning}
       version={version}
       activeJob={activeJob}
     >

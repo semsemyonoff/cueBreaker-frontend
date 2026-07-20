@@ -29,6 +29,8 @@ export interface ShellProps {
   selectedPath: string | null
   onSelect: (item: ScanPair) => void
   onRescan: () => void
+  /** Passed straight to Sidebar's Rescan button — see SidebarProps. */
+  scanning?: boolean
   version: string
   /** The running split, lifted out of AlbumPanel via App; drives the topbar dot and tree progress. */
   activeJob?: ActiveJob | null
@@ -40,6 +42,7 @@ export default function Shell({
   selectedPath,
   onSelect,
   onRescan,
+  scanning = false,
   version,
   activeJob = null,
   children,
@@ -171,6 +174,7 @@ export default function Shell({
             selectedPath={selectedPath}
             onSelect={selectAndClose}
             onRescan={onRescan}
+            scanning={scanning}
             activeJob={activeJob}
           />
           <div
