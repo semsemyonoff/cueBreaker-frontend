@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import type { LogEntry, LogLevel } from '../api/types'
+import { useStickyScroll } from '../ui/useStickyScroll'
 import '../styles/log.css'
 
 export interface LogPanelProps {
@@ -27,6 +28,9 @@ function formatTime(iso: string): string {
 
 /** Collapsible log list shared by the split panel and the scan sidebar footer. */
 export default function LogPanel({ entries, label, summary, open, onToggle }: LogPanelProps) {
+  const bodyRef = useRef<HTMLUListElement>(null)
+  useStickyScroll(bodyRef, [entries.length])
+
   return (
     <div className="logbox">
       <button className="lh" type="button" aria-expanded={open} onClick={() => onToggle(!open)}>
@@ -38,7 +42,7 @@ export default function LogPanel({ entries, label, summary, open, onToggle }: Lo
         {summary !== undefined && <span className="lsum">{summary}</span>}
       </button>
       {open && (
-        <ul className="lbody">
+        <ul className="lbody" ref={bodyRef}>
           {entries.length === 0 ? (
             <li className="lempty">No log entries yet</li>
           ) : (
