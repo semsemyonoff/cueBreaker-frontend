@@ -88,6 +88,8 @@ function splittingBackend(items: ScanPair[] | (() => ScanPair[])) {
           progress_current: 1,
           progress_total: 2,
           progress_detail: 'Track 1',
+          log: [],
+          log_next: 0,
         })
       )
     }
@@ -384,6 +386,8 @@ describe('App', () => {
             progress_current: 2,
             progress_total: 2,
             progress_detail: '',
+            log: [],
+            log_next: 0,
           })
         )
       }

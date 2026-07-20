@@ -86,6 +86,67 @@ describe('pollReducer', () => {
     state = pollReducer(state, { type: 'reset' })
     expect(state).toEqual(initialPollState)
   })
+
+  it('appends log entries across ticks and advances the cursor', () => {
+    let state: PollState = initialPollState
+    state = pollReducer(state, {
+      type: 'status',
+      job: job({
+        status: 'splitting',
+        log: [{ seq: 0, time: 't0', level: 'info', text: 'cue parsed' }],
+        log_next: 1,
+      }),
+    })
+    expect(state.log).toEqual([{ seq: 0, time: 't0', level: 'info', text: 'cue parsed' }])
+    expect(state.logNext).toBe(1)
+
+    state = pollReducer(state, {
+      type: 'status',
+      job: job({
+        status: 'splitting',
+        log: [{ seq: 1, time: 't1', level: 'info', text: 'track 01/04' }],
+        log_next: 2,
+      }),
+    })
+    expect(state.log).toEqual([
+      { seq: 0, time: 't0', level: 'info', text: 'cue parsed' },
+      { seq: 1, time: 't1', level: 'info', text: 'track 01/04' },
+    ])
+    expect(state.logNext).toBe(2)
+  })
+
+  it('keeps the cursor and log unchanged when a tick brings back no new entries', () => {
+    let state: PollState = initialPollState
+    state = pollReducer(state, {
+      type: 'status',
+      job: job({
+        status: 'splitting',
+        log: [{ seq: 0, time: 't0', level: 'info', text: 'cue parsed' }],
+        log_next: 1,
+      }),
+    })
+
+    state = pollReducer(state, {
+      type: 'status',
+      job: job({ status: 'splitting', log: [], log_next: 1 }),
+    })
+    expect(state.log).toEqual([{ seq: 0, time: 't0', level: 'info', text: 'cue parsed' }])
+    expect(state.logNext).toBe(1)
+  })
+
+  it('reset clears the accumulated log and cursor along with everything else', () => {
+    let state: PollState = initialPollState
+    state = pollReducer(state, {
+      type: 'status',
+      job: job({
+        status: 'done',
+        log: [{ seq: 0, time: 't0', level: 'info', text: 'done: 4 files' }],
+        log_next: 1,
+      }),
+    })
+    state = pollReducer(state, { type: 'reset' })
+    expect(state).toEqual(initialPollState)
+  })
 })
 
 function jobResponse(body: JobStatus): Response {
@@ -251,5 +312,116 @@ describe('usePoll hook', () => {
 
     await idle()
     expect(fetchMock.mock.calls.length).toBe(callsBeforeClear)
+  })
+
+  it('requests the current log cursor on every tick', async () => {
+    const responses: JobStatus[] = [
+      job({
+        status: 'splitting',
+        log: [{ seq: 0, time: 't0', level: 'info', text: 'a' }],
+        log_next: 1,
+      }),
+      job({
+        status: 'splitting',
+        log: [{ seq: 1, time: 't1', level: 'info', text: 'b' }],
+        log_next: 3,
+      }),
+      job({ status: 'done', log: [], log_next: 3 }),
+    ]
+    let i = 0
+    const fetchMock = vi.fn(() => {
+      const body = responses[Math.min(i, responses.length - 1)]
+      i += 1
+      return Promise.resolve(jobResponse(body))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => usePoll('Artist/Album/album.cue', 0, 10))
+    await waitFor(() => expect(result.current.job?.status).toBe('done'))
+
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]))
+    expect(urls[0]).not.toContain('log_since')
+    expect(urls[1]).toContain('log_since=1')
+    expect(urls[2]).toContain('log_since=3')
+    expect(result.current.log.map((e) => e.text)).toEqual(['a', 'b'])
+  })
+
+  it('restarts polling and the accumulated log from empty when runToken changes', async () => {
+    let call = 0
+    const fetchMock = vi.fn(() => {
+      call += 1
+      if (call === 1) {
+        return Promise.resolve(
+          jobResponse(
+            job({
+              status: 'done',
+              log: [{ seq: 0, time: 't0', level: 'info', text: 'first run' }],
+              log_next: 1,
+            })
+          )
+        )
+      }
+      return Promise.resolve(
+        jobResponse(
+          job({
+            status: 'done',
+            log: [{ seq: 0, time: 't0', level: 'info', text: 'second run' }],
+            log_next: 1,
+          })
+        )
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result, rerender } = renderHook(({ jobId, runToken }) => usePoll(jobId, runToken, 10), {
+      initialProps: { jobId: 'Artist/Album/album.cue', runToken: 0 },
+    })
+
+    await waitFor(() => expect(result.current.job?.status).toBe('done'))
+    expect(result.current.log.map((e) => e.text)).toEqual(['first run'])
+
+    rerender({ jobId: 'Artist/Album/album.cue', runToken: 1 })
+    expect(result.current.log).toEqual([])
+
+    await waitFor(() => expect(result.current.log.map((e) => e.text)).toEqual(['second run']))
+    const secondRunUrl = String(fetchMock.mock.calls[fetchMock.mock.calls.length - 1][0])
+    expect(secondRunUrl).not.toContain('log_since')
+  })
+
+  it('does not start a second request while one is in flight, and appends no entry twice', async () => {
+    let releaseFirst: (() => void) | null = null
+    const first = new Promise<Response>((resolve) => {
+      releaseFirst = () =>
+        resolve(
+          jobResponse(
+            job({
+              status: 'splitting',
+              log: [{ seq: 0, time: 't0', level: 'info', text: 'slow tick' }],
+              log_next: 1,
+            })
+          )
+        )
+    })
+    let call = 0
+    const fetchMock = vi.fn(() => {
+      call += 1
+      if (call === 1) return first
+      return Promise.resolve(jobResponse(job({ status: 'done', log: [], log_next: 1 })))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => usePoll('Artist/Album/album.cue', 0, 10))
+
+    // Several intervals' worth of wall-clock time pass while the first request hangs.
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    expect(fetchMock.mock.calls.length).toBe(1)
+    expect(result.current.log).toEqual([])
+
+    releaseFirst?.()
+    await waitFor(() => expect(result.current.log).toHaveLength(1))
+    await waitFor(() => expect(result.current.job?.status).toBe('done'))
+
+    await idle()
+    expect(result.current.log).toEqual([{ seq: 0, time: 't0', level: 'info', text: 'slow tick' }])
   })
 })

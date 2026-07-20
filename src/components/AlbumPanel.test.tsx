@@ -251,6 +251,8 @@ describe('AlbumPanel', () => {
               progress_current: 4,
               progress_total: 4,
               progress_detail: 'Complete',
+              log: [],
+              log_next: 0,
             })
           )
         }
@@ -336,6 +338,8 @@ describe('AlbumPanel', () => {
               progress_current: 1,
               progress_total: 1,
               progress_detail: 'Complete',
+              log: [],
+              log_next: 0,
             })
           )
         }
@@ -673,6 +677,8 @@ describe('AlbumPanel', () => {
         progress_current: 1,
         progress_total: 4,
         progress_detail: 'track 1',
+        log: [],
+        log_next: 0,
       },
       {
         status: 'error',
@@ -681,6 +687,8 @@ describe('AlbumPanel', () => {
         progress_current: 1,
         progress_total: 4,
         progress_detail: '',
+        log: [],
+        log_next: 0,
       },
     ]
     let poll = 0
@@ -816,6 +824,8 @@ describe('AlbumPanel', () => {
               progress_current: 1,
               progress_total: 1,
               progress_detail: '',
+              log: [],
+              log_next: 0,
             })
           )
         return Promise.resolve(jsonResponse({}))
