@@ -23,6 +23,15 @@ function splitPath(path: string): string[] {
   return path.split('/').filter(Boolean)
 }
 
+/**
+ * The last segment of an album's path — the name the tree labels its row with,
+ * and the one the breadcrumb bolds and the document title carries.
+ */
+export function albumLeaf(path: string): string {
+  const segments = splitPath(path)
+  return segments[segments.length - 1] ?? path
+}
+
 // Pinned to an explicit locale: a bare localeCompare() resolves against the runtime's
 // default, so CI, the dev container and a browser could each order siblings differently.
 const pathCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'variant' })

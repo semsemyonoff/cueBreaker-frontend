@@ -2,6 +2,8 @@ import type { Ref } from 'react'
 
 export interface TopbarProps {
   version: string
+  /** The splitter's shntool version; the badge is dropped when it is unknown. */
+  shntoolVersion?: string
   albumCount: number
   unsplitCount: number
   /** Number of splits currently running; replaces the album count while non-zero (proto:264). */
@@ -14,6 +16,7 @@ export interface TopbarProps {
 
 export default function Topbar({
   version,
+  shntoolVersion = '',
   albumCount,
   unsplitCount,
   splittingCount,
@@ -45,6 +48,7 @@ export default function Topbar({
           cue<span>Breaker</span>
         </div>
         {version && <span className="ver">v{version}</span>}
+        {shntoolVersion && <span className="ver tool">shntool {shntoolVersion}</span>}
       </div>
       <div className="tstat">
         <span className={splitting ? 'dot run' : 'dot'} />

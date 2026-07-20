@@ -236,7 +236,10 @@
   padding-left: 16px;
 }
 
+/* An <a>, so an album can be opened in a new tab — hence the anchor reset. */
 .talbum {
+  color: inherit;
+  text-decoration: none;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -363,6 +366,12 @@
   }
 
   .tstat span:not(:first-child) {
+    display: none;
+  }
+
+  /* The condensed topbar has no room for a second badge; the app's own
+     version is the one worth keeping at this width. */
+  .ver.tool {
     display: none;
   }
 

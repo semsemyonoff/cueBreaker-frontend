@@ -160,6 +160,64 @@ describe('Tree keyboard activation', () => {
   })
 })
 
+describe('Tree album links', () => {
+  it('renders an album row as a link to its album URL', () => {
+    renderTree([pair("Lossless/Marlow's Trio")])
+    fireEvent.click(screen.getByText('Lossless').closest('.tfolder')!)
+
+    const album = screen.getByText("Marlow's Trio").closest('.talbum')!
+    expect(album.tagName).toBe('A')
+    expect(album).toHaveAttribute('href', "?album=Lossless%2FMarlow's%20Trio")
+  })
+
+  it('marks the selected row with aria-current', () => {
+    renderTree([pair('Album A'), pair('Album B')], { selectedPath: 'Album B' })
+
+    expect(screen.getByText('Album A').closest('.talbum')).not.toHaveAttribute('aria-current')
+    expect(screen.getByText('Album B').closest('.talbum')).toHaveAttribute('aria-current', 'true')
+  })
+
+  it('selects in place on a plain click, preventing the navigation', () => {
+    const onSelect = vi.fn()
+    renderTree([pair('Album')], { onSelect })
+
+    const prevented = !fireEvent.click(screen.getByText('Album').closest('.talbum')!)
+    expect(prevented).toBe(true)
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ path: 'Album' }))
+  })
+
+  it('leaves the browser to handle new-tab and new-window gestures', () => {
+    const onSelect = vi.fn()
+    renderTree([pair('Album')], { onSelect })
+    const album = screen.getByText('Album').closest('.talbum')!
+
+    // Runs after React's handler (which is bound on the root container) and
+    // records what it decided, then stops jsdom from trying to navigate for real.
+    const prevented: boolean[] = []
+    function record(event: Event) {
+      prevented.push(event.defaultPrevented)
+      event.preventDefault()
+    }
+    window.addEventListener('click', record)
+
+    const gestures = [
+      { metaKey: true },
+      { ctrlKey: true },
+      { shiftKey: true },
+      { altKey: true },
+      { button: 1 },
+    ]
+    for (const gesture of gestures) {
+      fireEvent.click(album, gesture)
+    }
+    window.removeEventListener('click', record)
+
+    // Nothing prevented, so each anchor's own navigation stands.
+    expect(prevented).toEqual([false, false, false, false, false])
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+})
+
 describe('Tree album rows', () => {
   it('marks only the selected album active', () => {
     renderTree([pair('Album A'), pair('Album B')], { selectedPath: 'Album B' })

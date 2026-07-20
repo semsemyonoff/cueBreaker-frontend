@@ -32,6 +32,8 @@ export interface ShellProps {
   /** Passed straight to Sidebar's Rescan button — see SidebarProps. */
   scanning?: boolean
   version: string
+  /** Passed straight to Topbar's second version badge — see TopbarProps. */
+  shntoolVersion?: string
   /** The running split, lifted out of AlbumPanel via App; drives the topbar dot and tree progress. */
   activeJob?: ActiveJob | null
   children?: ReactNode
@@ -44,6 +46,7 @@ export default function Shell({
   onRescan,
   scanning = false,
   version,
+  shntoolVersion = '',
   activeJob = null,
   children,
 }: ShellProps) {
@@ -152,6 +155,7 @@ export default function Shell({
     <div className="shell">
       <Topbar
         version={version}
+        shntoolVersion={shntoolVersion}
         albumCount={albumCount}
         unsplitCount={unsplitCount}
         splittingCount={activeJob === null ? 0 : 1}

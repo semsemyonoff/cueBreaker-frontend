@@ -28,6 +28,11 @@ const album = {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  // Selecting an album pushes `?album=…`, and jsdom keeps one location for the
+  // whole file — so without this every later test would mount deep-linked into
+  // whatever the previous one opened.
+  window.history.replaceState(null, '', '/')
+  document.title = 'cueBreaker'
 })
 
 /**
@@ -465,5 +470,74 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(screen.queryByText('Library scan failed')).not.toBeInTheDocument())
     expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting1 unsplit')
+  })
+})
+
+describe('App album addressing', () => {
+  const other = { ...album, path: 'Other' }
+
+  it('opens the album named by the URL on mount', async () => {
+    vi.stubGlobal('fetch', vi.fn(splittingBackend([album, other])))
+    window.history.replaceState(null, '', '?album=Other')
+
+    const { container } = render(<App />)
+
+    await screen.findByText('Split 2 tracks')
+    expect(container.querySelector('.talbum.active')?.textContent).toContain('Other')
+  })
+
+  it('carries the open album in the document title, and drops it again on Back', async () => {
+    vi.stubGlobal('fetch', vi.fn(splittingBackend([album, other])))
+
+    render(<App />)
+    await screen.findByText('Select an album from the library.')
+    expect(document.title).toBe('cueBreaker')
+
+    fireEvent.click(screen.getByText('Album'))
+    await waitFor(() => expect(document.title).toBe('Album — cueBreaker'))
+
+    window.history.back()
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    await waitFor(() => expect(document.title).toBe('cueBreaker'))
+  })
+
+  it('titles a deep-linked tab before the scan has resolved the album', async () => {
+    vi.stubGlobal('fetch', vi.fn(splittingBackend([album])))
+    window.history.replaceState(null, '', '?album=Lossless%2FMarlow%20Trio')
+
+    render(<App />)
+
+    expect(document.title).toBe('Marlow Trio — cueBreaker')
+  })
+
+  it('shows no album when the URL names one the scan does not have', async () => {
+    vi.stubGlobal('fetch', vi.fn(splittingBackend([album])))
+    window.history.replaceState(null, '', '?album=Gone')
+
+    render(<App />)
+
+    expect(await screen.findByText('Select an album from the library.')).toBeInTheDocument()
+  })
+
+  it('pushes the album URL on select, and Back returns to the previous album', async () => {
+    vi.stubGlobal('fetch', vi.fn(splittingBackend([album, other])))
+
+    const { container } = render(<App />)
+    await screen.findByText('Select an album from the library.')
+
+    fireEvent.click(screen.getByText('Album'))
+    expect(window.location.search).toBe('?album=Album')
+    fireEvent.click(screen.getByText('Other'))
+    expect(window.location.search).toBe('?album=Other')
+    await waitFor(() =>
+      expect(container.querySelector('.talbum.active')?.textContent).toContain('Other')
+    )
+
+    // jsdom moves the location but never fires popstate itself.
+    window.history.back()
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    await waitFor(() =>
+      expect(container.querySelector('.talbum.active')?.textContent).toContain('Album')
+    )
   })
 })

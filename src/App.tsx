@@ -4,13 +4,22 @@ import type { ActiveJob, ScanPair } from './api/types'
 import AlbumPanel from './components/AlbumPanel'
 import Shell from './components/Shell'
 import { EmptyScan, ScanError, ScanningLibrary } from './components/States'
+import { albumHref, readAlbumPath } from './tree/albumUrl'
+import { documentTitle } from './ui/title'
 import './styles/shell.css'
 import './styles/states.css'
 
 export default function App() {
   const [items, setItems] = useState<ScanPair[]>([])
   const [selected, setSelected] = useState<ScanPair | null>(null)
+  // The address of the open album, mirroring the URL — which is what makes the
+  // tree's rows shareable links. `selected` is still the pair the panel renders;
+  // it is resolved from this path once the scan has landed.
+  const [selectedPath, setSelectedPath] = useState<string | null>(() =>
+    readAlbumPath(window.location.search)
+  )
   const [version, setVersion] = useState('')
+  const [shntoolVersion, setShntoolVersion] = useState('')
   const [scanning, setScanning] = useState(true)
   const [scanError, setScanError] = useState<string | null>(null)
   const [refreshToken, setRefreshToken] = useState(0)
@@ -70,9 +79,50 @@ export default function App() {
     rescan()
     api
       .version()
-      .then((v) => setVersion(v.version))
-      .catch(() => setVersion(''))
+      .then((v) => {
+        setVersion(v.version)
+        setShntoolVersion(v.shntool_version ?? '')
+      })
+      .catch(() => {
+        setVersion('')
+        setShntoolVersion('')
+      })
   }, [rescan])
+
+  // Back/forward — and a deep link landing on a `?album=` URL — move the
+  // selection through the address, not through the tree.
+  useEffect(() => {
+    function syncFromUrl() {
+      setSelectedPath(readAlbumPath(window.location.search))
+    }
+    window.addEventListener('popstate', syncFromUrl)
+    return () => window.removeEventListener('popstate', syncFromUrl)
+  }, [])
+
+  // Resolves the addressed album against the scan, so a deep link opens as soon
+  // as the items land. An unchanged path keeps the current pair untouched —
+  // that is what leaves the rescan/refresh reconciliation above in charge of it.
+  useEffect(() => {
+    setSelected((current) => {
+      if (selectedPath === null) return null
+      if (current?.path === selectedPath) return current
+      return items.find((pair) => pair.path === selectedPath) ?? null
+    })
+  }, [selectedPath, items])
+
+  // Keyed on the addressed path rather than on `selected`, so a tab restored
+  // onto a deep link is named before the scan that resolves it has landed.
+  useEffect(() => {
+    document.title = documentTitle(selectedPath)
+  }, [selectedPath])
+
+  // Selecting an album is a navigation: it pushes a history entry, so Back
+  // returns to the previously open album.
+  const selectAlbum = useCallback((item: ScanPair) => {
+    setSelected(item)
+    setSelectedPath(item.path)
+    window.history.pushState(null, '', albumHref(item.path))
+  }, [])
 
   let content
   if (scanning && selected === null) {
@@ -114,10 +164,11 @@ export default function App() {
     <Shell
       items={items}
       selectedPath={selected?.path ?? null}
-      onSelect={setSelected}
+      onSelect={selectAlbum}
       onRescan={rescan}
       scanning={scanning}
       version={version}
+      shntoolVersion={shntoolVersion}
       activeJob={activeJob}
     >
       {content}

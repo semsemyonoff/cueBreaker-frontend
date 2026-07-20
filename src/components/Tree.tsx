@@ -1,7 +1,8 @@
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, MouseEvent } from 'react'
 import { useState } from 'react'
 import { progressPercent } from '../api/types'
 import type { ActiveJob, ScanPair } from '../api/types'
+import { albumHref } from '../tree/albumUrl'
 import {
   loadOpenPaths,
   toggleOpenPath,
@@ -155,6 +156,18 @@ function AlbumRow({
 }) {
   const { item } = node
   const selectThis = () => onSelect(item)
+
+  // The row is a real link, so the browser's own new-tab/new-window
+  // gestures (⌘/Ctrl+click, middle click, Shift/Alt+click) must be left to
+  // navigate. Only a plain left click is handled in place.
+  function selectOnClick(event: MouseEvent) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return
+    }
+    event.preventDefault()
+    selectThis()
+  }
+
   const splitting = activeJob !== null && activeJob.path === item.path
   const classes = ['talbum']
   if (isSelected) classes.push('active')
@@ -162,11 +175,18 @@ function AlbumRow({
   if (item.split_done && !splitting) classes.push('done')
 
   return (
-    <div
+    <a
       className={classes.join(' ')}
-      role="button"
+      href={albumHref(item.path)}
+      aria-current={isSelected || undefined}
+      // Redundant for a link, but Shell finds the drawer's first focusable
+      // element with a `[tabindex="0"]` selector.
       tabIndex={0}
-      onClick={selectThis}
+      onClick={selectOnClick}
+      // Links activate on Enter but not on Space; handling both here keeps
+      // the row's keyboard behaviour what it was. preventDefault also
+      // suppresses the click Enter would otherwise synthesize, so a keyboard
+      // activation selects exactly once.
       onKeyDown={activateOnKey(selectThis)}
     >
       <span className="sig">
@@ -188,6 +208,6 @@ function AlbumRow({
           {item.cue_files.length} cue{item.cue_files.length === 1 ? '' : 's'}
         </span>
       )}
-    </div>
+    </a>
   )
 }

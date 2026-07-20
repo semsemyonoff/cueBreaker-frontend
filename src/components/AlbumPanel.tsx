@@ -3,6 +3,7 @@ import * as api from '../api/client'
 import { ACTIVE_STATUSES, progressPercent } from '../api/types'
 import type { ActiveJob, Preview, ScanPair } from '../api/types'
 import { usePoll } from '../split/usePoll'
+import { albumLeaf } from '../tree/buildTree'
 import { formatDuration } from '../waveform/geometry'
 import CueSelector from './CueSelector'
 import { ErrIcon } from './icons'
@@ -33,7 +34,7 @@ interface Breadcrumb {
 
 function breadcrumb(path: string): Breadcrumb {
   const parts = path.split('/').filter(Boolean)
-  return { parents: parts.slice(0, -1), leaf: parts[parts.length - 1] ?? path }
+  return { parents: parts.slice(0, -1), leaf: albumLeaf(path) }
 }
 
 export default function AlbumPanel({

@@ -72,6 +72,16 @@ npm run typecheck      # tsc -b --noEmit
   keying a rescan off that would re-scan on every click. Because `jobRun` outlives an album
   switch, returning to a split album restores its job id and re-polls the same `done` — the
   `signalledRun` latch is what stops that replaying the rescan.
+- **Album rows are `<a href>`, and the URL is what addresses an album** — so a row can be
+  opened in a new tab and an album can be linked to. There is still no router: the address is
+  a single `?album=<path>` query parameter (`tree/albumUrl.ts`), chosen over a path segment
+  because it cannot collide with a real asset and needs no SPA fallback. `App` keeps
+  `selectedPath` mirroring the URL and resolves the `ScanPair` from it once the scan lands, so
+  a deep link opens as soon as the items arrive; selecting pushes a history entry and
+  `popstate` drives it back. `AlbumRow`'s click handler bails out on any modifier or non-left
+  button, leaving the browser's own new-tab gestures alone, and keeps its `onKeyDown` because
+  links activate on Enter but not on Space. In jsdom one location is shared by a whole test
+  file — `App.test.tsx` resets it in `afterEach`, or later tests mount deep-linked.
 - **ESLint** (flat config, typescript-eslint) + **Prettier** (`eslint-config-prettier` last,
   so Prettier owns formatting): no semicolons, single quotes, 100-col. Run `npm run format`
   before committing; CI runs `lint` + `format:check` + `typecheck`.

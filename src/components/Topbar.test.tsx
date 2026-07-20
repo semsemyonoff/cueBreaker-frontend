@@ -34,4 +34,38 @@ describe('Topbar version badge', () => {
 
     expect(container.querySelector('.ver')).toBeNull()
   })
+
+  it('renders the shntool badge beside the app version', () => {
+    const { container } = render(
+      <Topbar
+        version="1.2.3"
+        shntoolVersion="3.0.10"
+        albumCount={4}
+        unsplitCount={2}
+        splittingCount={0}
+        drawerOpen={false}
+        drawerId="library-drawer"
+        onBurgerClick={() => {}}
+      />
+    )
+
+    const badges = [...container.querySelectorAll('.ver')].map((el) => el.textContent)
+    expect(badges).toEqual(['v1.2.3', 'shntool 3.0.10'])
+  })
+
+  it('renders no shntool badge when the backend could not determine the version', () => {
+    const { container } = render(
+      <Topbar
+        version="1.2.3"
+        albumCount={4}
+        unsplitCount={2}
+        splittingCount={0}
+        drawerOpen={false}
+        drawerId="library-drawer"
+        onBurgerClick={() => {}}
+      />
+    )
+
+    expect(container.querySelector('.ver.tool')).toBeNull()
+  })
 })

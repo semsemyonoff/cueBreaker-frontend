@@ -87,4 +87,6 @@ export interface SplitAccepted {
 /** GET /api/version response. */
 export interface Version {
   version: string
+  /** The installed shntool's version; absent when the backend could not determine it. */
+  shntool_version?: string
 }
