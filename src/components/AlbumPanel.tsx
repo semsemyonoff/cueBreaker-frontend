@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as api from '../api/client'
 import { ACTIVE_STATUSES, progressPercent } from '../api/types'
-import type { ActiveJob, JobStatusValue, Preview, ScanPair } from '../api/types'
+import type { ActiveJob, JobStatusValue, LogEntry, Preview, ScanPair } from '../api/types'
 import { usePoll } from '../split/usePoll'
 import { albumLeaf } from '../tree/buildTree'
 import { formatDuration } from '../waveform/geometry'
@@ -41,6 +41,9 @@ const KNOWN_STATUSES: ReadonlySet<JobStatusValue> = new Set<JobStatusValue>([
   'done',
   'error',
 ])
+
+// Module-level so the empty case keeps a stable prop identity across renders.
+const EMPTY_LOG: LogEntry[] = []
 
 function breadcrumb(path: string): Breadcrumb {
   const parts = path.split('/').filter(Boolean)
@@ -126,6 +129,10 @@ export default function AlbumPanel({
   // belt-and-braces rather than a visible bug — but it keeps `job` and `jobId` from
   // ever disagreeing, which is what the emit effect below reports upward.
   const job = jobId === null ? null : poll.job
+  // Same guard for the accumulated log, and here it *is* visible: `poll.log` still
+  // holds the previous album's entries for the render after `jobId` goes null, so
+  // switching albums would paint album A's split log under album B's header.
+  const log = jobId === null ? EMPTY_LOG : poll.log
   // A fetch failure halts polling on a possibly-stale `splitting`/`tagging` job;
   // treat that as no-longer-active so the UI surfaces the error and offers Retry.
   const active = poll.fetchError === null && job !== null && ACTIVE_STATUSES.has(job.status)
@@ -140,6 +147,10 @@ export default function AlbumPanel({
 
   useEffect(() => {
     userToggled.current = false
+    // Collapse too, or a failed split's auto-expanded panel would follow the user
+    // to the next album and sit open over "No log entries yet". Safe for the
+    // `runToken` (Retry) case: the auto-expand effect re-opens it if that run errors.
+    setLogOpen(false)
   }, [item.path, cueFile, runToken])
 
   useEffect(() => {
@@ -374,9 +385,9 @@ export default function AlbumPanel({
         onSplit={handleSplit}
       />
       <LogPanel
-        entries={poll.log}
+        entries={log}
         label="Split log"
-        summary={`${poll.log.length} line${poll.log.length === 1 ? '' : 's'}`}
+        summary={`${log.length} line${log.length === 1 ? '' : 's'}`}
         open={logOpen}
         onToggle={(next) => {
           userToggled.current = true

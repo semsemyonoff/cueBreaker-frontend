@@ -1388,6 +1388,13 @@ describe('AlbumPanel', () => {
 
     rerender(<AlbumPanel item={item} />)
     expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+    // The album switch collapses the panel (a failed run's auto-expand must not
+    // follow the user to the next album), so reopen it to inspect the entries.
+    expect(screen.getByRole('button', { name: /split log/i })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+    fireEvent.click(screen.getByRole('button', { name: /split log/i }))
     await screen.findByText('done: 2 files')
     expect(entryTexts()).toEqual([
       'cue parsed: 2 tracks',
@@ -1501,6 +1508,10 @@ describe('AlbumPanel', () => {
     previewTitle = 'Second'
     rerender(<AlbumPanel item={{ ...item, path: 'Artist/Second' }} />)
 
+    // The switch collapses the log; reopening it must show the second album's
+    // restored entries, never the first album's still-buffered ones.
+    expect(await screen.findByText('Second')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /split log/i }))
     expect(await screen.findByText('second album line')).toBeInTheDocument()
     expect(screen.queryByText('first album line')).not.toBeInTheDocument()
   })

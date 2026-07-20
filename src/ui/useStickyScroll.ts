@@ -11,10 +11,19 @@ export function useStickyScroll(
   deps: readonly unknown[]
 ): void {
   const stuck = useRef(true)
+  const observed = useRef<HTMLElement | null>(null)
 
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
+
+    // A collapsed panel unmounts its scroller, so reopening it mounts a fresh
+    // element at scrollTop 0. `stuck` outlives that element: without re-arming,
+    // a log the user had scrolled up in reopens showing the oldest entries.
+    if (observed.current !== el) {
+      observed.current = el
+      stuck.current = true
+    }
 
     const handleScroll = () => {
       stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD

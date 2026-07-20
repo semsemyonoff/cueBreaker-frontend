@@ -75,6 +75,29 @@ describe('useStickyScroll', () => {
     expect(el.scrollTop).toBe(900)
   })
 
+  // Collapsing a log panel unmounts its scroller; reopening mounts a fresh one at
+  // scrollTop 0. The `stuck` ref outlives that element, so a user who had scrolled
+  // up would otherwise reopen the log showing its oldest entries forever.
+  it('re-arms for a replacement element after a manual scroll up', () => {
+    const first = document.createElement('div')
+    stub(first, { scrollHeight: 500, clientHeight: 200, scrollTop: 300 })
+    const ref: { current: HTMLElement | null } = { current: first }
+
+    const { rerender } = renderHook(({ deps }) => useStickyScroll(ref, deps), {
+      initialProps: { deps: [1] },
+    })
+
+    stub(first, { scrollHeight: 500, clientHeight: 200, scrollTop: 0 })
+    first.dispatchEvent(new Event('scroll'))
+
+    const second = document.createElement('div')
+    stub(second, { scrollHeight: 900, clientHeight: 200, scrollTop: 0 })
+    ref.current = second
+    rerender({ deps: [2] })
+
+    expect(second.scrollTop).toBe(900)
+  })
+
   it('no-ops when there is no element attached', () => {
     const ref = { current: null }
 

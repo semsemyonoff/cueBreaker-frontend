@@ -20,7 +20,10 @@ sibling `beetDeck` / `AlbFetcharr` orgs.
 - `src/ui/` — `resizer.ts` sidebar drag logic; `useIsMobile.ts` (mirrors the 900px CSS breakpoint);
   `useStickyScroll.ts` keeps a scrollable list pinned to the bottom while the user hasn't
   scrolled away (a `stuck` ref driven by a `scroll` listener, applied in a `useLayoutEffect`
-  keyed on `deps` — not a "measure before update" snapshot, which hooks can't express).
+  keyed on `deps` — not a "measure before update" snapshot, which hooks can't express). It
+  re-arms whenever the ref points at a new element: collapsing a log unmounts its scroller
+  while the `stuck` ref outlives it, so a log the user had scrolled up in would otherwise
+  reopen showing its oldest entries.
 - `src/components/` — Shell (topbar + resizable sidebar + panel), Tree, Sidebar, Topbar,
   AlbumPanel, CueSelector, TrackTable, Waveform, SplitAction, States, `LogPanel` (shared
   presentational log list — collapsible header button + timestamped, level-colored entries;
@@ -93,7 +96,10 @@ npm run typecheck      # tsc -b --noEmit
   never re-fires `onJobDone`; a restored active job signals normally when it completes. Its log
   (and the live split's log) render via the shared `LogPanel`, fed by `usePoll`'s accumulated
   `log`, auto-expanding on `status === 'error'` unless the user has manually toggled it for that
-  run — the toggle latch resets on a new `runToken` or album/CUE change.
+  run — the toggle latch resets on a new `runToken` or album/CUE change, and the panel collapses
+  with it so one album's auto-expanded failure log does not follow the user to the next. The
+  accumulated log is gated on `jobId` exactly as `job` is: `usePoll` resets in an effect, so
+  without the guard an album switch would paint the previous album's entries for one frame.
 - **Album rows are `<a href>`, and the URL is what addresses an album** — so a row can be
   opened in a new tab and an album can be linked to. There is still no router: the address is
   a single `?album=<path>` query parameter (`tree/albumUrl.ts`), chosen over a path segment
