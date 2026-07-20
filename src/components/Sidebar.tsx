@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import type { ActiveJob, ScanPair } from '../api/types'
+import type { ActiveJob, LogEntry, ScanPair, ScanSummary } from '../api/types'
 import { buildTree, filterTree } from '../tree/buildTree'
+import LogPanel from './LogPanel'
 import Tree from './Tree'
 
 export interface SidebarProps {
@@ -11,6 +12,8 @@ export interface SidebarProps {
   /** A scan is in flight — the button spins and stops accepting clicks. */
   scanning?: boolean
   activeJob?: ActiveJob | null
+  scanLog?: LogEntry[]
+  scanSummary?: ScanSummary | null
 }
 
 export default function Sidebar({
@@ -20,8 +23,11 @@ export default function Sidebar({
   onRescan,
   scanning = false,
   activeJob = null,
+  scanLog = [],
+  scanSummary = null,
 }: SidebarProps) {
   const [query, setQuery] = useState('')
+  const [logOpen, setLogOpen] = useState(false)
 
   const tree = useMemo(() => filterTree(buildTree(items), query), [items, query])
 
@@ -47,6 +53,17 @@ export default function Sidebar({
         </button>
       </div>
       <Tree nodes={tree} selectedPath={selectedPath} onSelect={onSelect} activeJob={activeJob} />
+      <LogPanel
+        entries={scanLog}
+        label="Scan log"
+        summary={
+          scanSummary
+            ? `${scanSummary.albums} album${scanSummary.albums === 1 ? '' : 's'} · ${scanSummary.skipped} skipped`
+            : undefined
+        }
+        open={logOpen}
+        onToggle={setLogOpen}
+      />
     </div>
   )
 }

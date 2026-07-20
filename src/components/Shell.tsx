@@ -7,7 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
-import type { ActiveJob, ScanPair } from '../api/types'
+import type { ActiveJob, LogEntry, ScanPair, ScanSummary } from '../api/types'
 import {
   MAX_SIDEBAR_WIDTH,
   MIN_SIDEBAR_WIDTH,
@@ -36,6 +36,9 @@ export interface ShellProps {
   shntoolVersion?: string
   /** The running split, lifted out of AlbumPanel via App; drives the topbar dot and tree progress. */
   activeJob?: ActiveJob | null
+  /** Passed straight to Sidebar's footer LogPanel — see SidebarProps. */
+  scanLog?: LogEntry[]
+  scanSummary?: ScanSummary | null
   children?: ReactNode
 }
 
@@ -48,6 +51,8 @@ export default function Shell({
   version,
   shntoolVersion = '',
   activeJob = null,
+  scanLog = [],
+  scanSummary = null,
   children,
 }: ShellProps) {
   const [sidebarWidth, setSidebarWidth] = useState(() => loadWidth())
@@ -180,6 +185,8 @@ export default function Shell({
             onRescan={onRescan}
             scanning={scanning}
             activeJob={activeJob}
+            scanLog={scanLog}
+            scanSummary={scanSummary}
           />
           <div
             className="resizer"

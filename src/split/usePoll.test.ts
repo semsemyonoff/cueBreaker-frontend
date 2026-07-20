@@ -329,7 +329,7 @@ describe('usePoll hook', () => {
       job({ status: 'done', log: [], log_next: 3 }),
     ]
     let i = 0
-    const fetchMock = vi.fn(() => {
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(() => {
       const body = responses[Math.min(i, responses.length - 1)]
       i += 1
       return Promise.resolve(jobResponse(body))
@@ -348,7 +348,7 @@ describe('usePoll hook', () => {
 
   it('restarts polling and the accumulated log from empty when runToken changes', async () => {
     let call = 0
-    const fetchMock = vi.fn(() => {
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(() => {
       call += 1
       if (call === 1) {
         return Promise.resolve(
@@ -389,7 +389,7 @@ describe('usePoll hook', () => {
   })
 
   it('does not start a second request while one is in flight, and appends no entry twice', async () => {
-    let releaseFirst: (() => void) | null = null
+    let releaseFirst: () => void = () => {}
     const first = new Promise<Response>((resolve) => {
       releaseFirst = () =>
         resolve(
@@ -403,7 +403,7 @@ describe('usePoll hook', () => {
         )
     })
     let call = 0
-    const fetchMock = vi.fn(() => {
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(() => {
       call += 1
       if (call === 1) return first
       return Promise.resolve(jobResponse(job({ status: 'done', log: [], log_next: 1 })))
@@ -417,7 +417,7 @@ describe('usePoll hook', () => {
     expect(fetchMock.mock.calls.length).toBe(1)
     expect(result.current.log).toEqual([])
 
-    releaseFirst?.()
+    releaseFirst()
     await waitFor(() => expect(result.current.log).toHaveLength(1))
     await waitFor(() => expect(result.current.job?.status).toBe('done'))
 

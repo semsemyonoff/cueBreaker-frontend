@@ -1,5 +1,6 @@
 .logbox {
   margin-top: 16px;
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;

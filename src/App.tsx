@@ -23,12 +23,8 @@ export default function App() {
   const [scanning, setScanning] = useState(true)
   const [scanError, setScanError] = useState<string | null>(null)
   const [refreshToken, setRefreshToken] = useState(0)
-  // Rendered by a later task (the sidebar footer log panel); kept in state now so
-  // the migration to the object scan shape lands in one place.
   const [scanLog, setScanLog] = useState<LogEntry[]>([])
   const [scanSummary, setScanSummary] = useState<ScanSummary | null>(null)
-  void scanLog
-  void scanSummary
   // AlbumPanel owns the polling; App is the only path from it to Shell, since the
   // panel is passed to Shell as opaque children.
   const [activeJob, setActiveJob] = useState<ActiveJob | null>(null)
@@ -184,6 +180,8 @@ export default function App() {
       version={version}
       shntoolVersion={shntoolVersion}
       activeJob={activeJob}
+      scanLog={scanLog}
+      scanSummary={scanSummary}
     >
       {content}
     </Shell>
