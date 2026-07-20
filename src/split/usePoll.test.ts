@@ -87,7 +87,7 @@ describe('pollReducer', () => {
     expect(state).toEqual(initialPollState)
   })
 
-  it('appends log entries across ticks and advances the cursor', () => {
+  it('appends log entries across ticks', () => {
     let state: PollState = initialPollState
     state = pollReducer(state, {
       type: 'status',
@@ -98,7 +98,6 @@ describe('pollReducer', () => {
       }),
     })
     expect(state.log).toEqual([{ seq: 0, time: 't0', level: 'info', text: 'cue parsed' }])
-    expect(state.logNext).toBe(1)
 
     state = pollReducer(state, {
       type: 'status',
@@ -112,10 +111,9 @@ describe('pollReducer', () => {
       { seq: 0, time: 't0', level: 'info', text: 'cue parsed' },
       { seq: 1, time: 't1', level: 'info', text: 'track 01/04' },
     ])
-    expect(state.logNext).toBe(2)
   })
 
-  it('keeps the cursor and log unchanged when a tick brings back no new entries', () => {
+  it('keeps the log unchanged when a tick brings back no new entries', () => {
     let state: PollState = initialPollState
     state = pollReducer(state, {
       type: 'status',
@@ -131,10 +129,9 @@ describe('pollReducer', () => {
       job: job({ status: 'splitting', log: [], log_next: 1 }),
     })
     expect(state.log).toEqual([{ seq: 0, time: 't0', level: 'info', text: 'cue parsed' }])
-    expect(state.logNext).toBe(1)
   })
 
-  it('reset clears the accumulated log and cursor along with everything else', () => {
+  it('reset clears the accumulated log along with everything else', () => {
     let state: PollState = initialPollState
     state = pollReducer(state, {
       type: 'status',

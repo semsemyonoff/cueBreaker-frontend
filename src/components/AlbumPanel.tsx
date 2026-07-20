@@ -174,8 +174,10 @@ export default function AlbumPanel({
         if (cancelled) return
         // A split started while the restore request was in flight wins — this check
         // must read the ref, not `jobRun`, since the closure above always sees the
-        // `null` it captured at mount.
-        if (jobRunRef.current !== null) return
+        // `null` it captured at mount. Compare keys rather than testing for any
+        // job at all: `jobRun` outlives an album switch, so a bare null-check
+        // would discard every later album's restore once one split has run.
+        if (jobRunRef.current?.key === restoreKey) return
         if (!KNOWN_STATUSES.has(restored.status)) return
         if (!ACTIVE_STATUSES.has(restored.status)) {
           // Pre-arm the latch before `setJobRun` so the completion effect below sees

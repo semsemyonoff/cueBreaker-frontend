@@ -25,8 +25,9 @@ src/
   tree/       flat-paths → library hierarchy builder
   waveform/   cut-line geometry (INDEX + duration → percent positions) + MM:SS formatting
   split/      split-status polling hook (usePoll)
-  ui/         sidebar resizer, useIsMobile (mirrors the 900px CSS breakpoint)
-  components/ Shell, Tree, Sidebar, Topbar, AlbumPanel, Waveform, ...
+  ui/         sidebar resizer, useIsMobile (mirrors the 900px CSS breakpoint),
+              useStickyScroll (pins a log list to its newest line)
+  components/ Shell, Tree, Sidebar, Topbar, AlbumPanel, Waveform, LogPanel, ...
   styles/     design tokens + per-area CSS
 ```
 
@@ -49,6 +50,27 @@ keyboard focus from the content behind it. Library rows are reachable by Tab and
 While a split runs, the topbar reports it in place of the album count and the album's tree row
 shows its progress. A library scan that fails says so and offers Retry, rather than rendering
 as an empty library.
+
+## Process logs
+
+Both the album panel and the sidebar carry a collapsible log, driven by the same `LogPanel` — a
+keyboard-operable `aria-expanded` disclosure button over a list of timestamped, level-coloured
+lines. Both start collapsed.
+
+- **Split log** (under the Split button) streams the pipeline as a run progresses: CUE parsed,
+  source resolved, breakpoints, one line per track, tagging, cover, done. It stays pinned to the
+  newest line unless you scroll up, and re-pins when you scroll back to the bottom. It expands
+  itself when a split fails, unless you had already toggled it by hand for that run.
+- **Scan log** (sidebar footer) lists one line per directory the walk rejected, with the reason —
+  already split, source missing, not FLAC/WAV, unreadable — plus an `N albums · M skipped`
+  summary. Directories holding no CUE sheet at all are never listed: they are the overwhelming
+  majority of a walk and carry no signal.
+
+Reloading the page mid-split re-attaches to the running job and its log; job ids are
+deterministic (`path/cue_file`), so the panel can ask the backend for one without you touching
+Split again. On mobile the log body is capped at 30vh so the tree keeps its own scroll.
+
+Each log is a bounded tail of the backend's last 500 entries, not a complete transcript.
 
 ## Development
 

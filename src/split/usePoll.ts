@@ -10,10 +10,9 @@ export interface PollState {
   job: JobStatus | null
   fetchError: string | null
   log: LogEntry[]
-  logNext: number
 }
 
-export const initialPollState: PollState = { job: null, fetchError: null, log: [], logNext: 0 }
+export const initialPollState: PollState = { job: null, fetchError: null, log: [] }
 
 export type PollAction =
   { type: 'reset' } | { type: 'status'; job: JobStatus } | { type: 'fetchError'; message: string }
@@ -27,7 +26,6 @@ export function pollReducer(state: PollState, action: PollAction): PollState {
         job: action.job,
         fetchError: null,
         log: action.job.log.length ? [...state.log, ...action.job.log] : state.log,
-        logNext: action.job.log_next,
       }
     case 'fetchError':
       return { ...state, fetchError: action.message }

@@ -13,9 +13,10 @@ sibling `beetDeck` / `AlbFetcharr` orgs.
   positions, plus the `MM:SS` timecode formatter.
 - `src/split/` — `usePoll.ts` split-status polling hook. Polls via a self-rescheduling
   `setTimeout` chain (never `setInterval`), so an incremental log cursor can't overlap requests.
-  Accumulates `log`/`logNext` from each `status()` response; the cursor lives in a ref (not
-  state) so a new log line never restarts the polling effect, and resets to `0` alongside the
-  reducer's `reset` on a `jobId`/`runToken` change.
+  Accumulates each `status()` response's `log` into one growing array; the cursor is a plain
+  closure variable inside the polling effect — not state, not a ref — so a new log line never
+  restarts the effect, and it resets to `0` automatically whenever the effect re-runs on a
+  `jobId`/`runToken` change, in step with the reducer's `reset`.
 - `src/ui/` — `resizer.ts` sidebar drag logic; `useIsMobile.ts` (mirrors the 900px CSS breakpoint);
   `useStickyScroll.ts` keeps a scrollable list pinned to the bottom while the user hasn't
   scrolled away (a `stuck` ref driven by a `scroll` listener, applied in a `useLayoutEffect`
@@ -83,9 +84,12 @@ npm run typecheck      # tsc -b --noEmit
   `signalledRun` latch is what stops that replaying the rescan. The same latch also guards a
   **fresh page load**: a one-shot mount effect restores the deterministic `path/cue_file` job id
   from `GET /api/status/...` (404 ignored silently), reading a `jobRun` ref rather than the
-  closed-over state so a slow restore can't clobber a run the user started meanwhile. When the
+  closed-over state so a slow restore can't clobber a run the user started meanwhile. That
+  guard compares the ref's _key_ against the album being restored, not merely "is any job
+  set?" — `jobRun` outlives an album switch, so a bare null-check would discard every later
+  album's restore once one split had run in the session. When the
   restored job is already terminal, the effect pre-arms `signalledRun.current` to
-  `` `${runToken}:${jobId}` `` *before* calling `setJobRun`, so mounting a already-`done` job
+  `` `${runToken}:${jobId}` `` _before_ calling `setJobRun`, so mounting a already-`done` job
   never re-fires `onJobDone`; a restored active job signals normally when it completes. Its log
   (and the live split's log) render via the shared `LogPanel`, fed by `usePoll`'s accumulated
   `log`, auto-expanding on `status === 'error'` unless the user has manually toggled it for that

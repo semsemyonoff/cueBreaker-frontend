@@ -148,8 +148,18 @@ describe('Sidebar rescan', () => {
 
 describe('Sidebar scan log', () => {
   const log: LogEntry[] = [
-    { seq: 1, time: '2026-07-20T14:03:22Z', level: 'warn', text: 'source file missing: image.flac' },
-    { seq: 2, time: '2026-07-20T14:03:23Z', level: 'info', text: 'multi-file cue (already split): x' },
+    {
+      seq: 1,
+      time: '2026-07-20T14:03:22Z',
+      level: 'warn',
+      text: 'source file missing: image.flac',
+    },
+    {
+      seq: 2,
+      time: '2026-07-20T14:03:23Z',
+      level: 'info',
+      text: 'multi-file cue (already split): x',
+    },
   ]
   const summary = { dirs_walked: 412, albums: 118, unsplit: 37, skipped: 6, elapsed_ms: 240 }
 
@@ -157,7 +167,10 @@ describe('Sidebar scan log', () => {
     renderSidebar({ scanLog: log, scanSummary: summary })
 
     expect(screen.getByText('118 albums · 6 skipped')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Scan log/ })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: /Scan log/ })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
   })
 
   it('renders each skipped-directory line with its level once opened', () => {

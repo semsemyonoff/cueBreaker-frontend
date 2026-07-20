@@ -32,17 +32,56 @@ describe('LogPanel collapse state', () => {
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true')
   })
 
-  it('calls onToggle with the flipped state when the header is clicked', () => {
+  it('calls onToggle with true when a collapsed header is clicked', () => {
     const onToggle = vi.fn()
     render(<LogPanel entries={[]} label="Split log" open={false} onToggle={onToggle} />)
 
     fireEvent.click(screen.getByRole('button'))
     expect(onToggle).toHaveBeenCalledWith(true)
+  })
 
-    onToggle.mockClear()
+  it('calls onToggle with false when an expanded header is clicked', () => {
+    const onToggle = vi.fn()
     render(<LogPanel entries={[]} label="Split log" open={true} onToggle={onToggle} />)
-    fireEvent.click(screen.getAllByRole('button')[1])
+
+    fireEvent.click(screen.getByRole('button'))
     expect(onToggle).toHaveBeenCalledWith(false)
+  })
+
+  // The <ul> unmounts while collapsed, so reopening mounts a fresh element. The
+  // sticky-scroll effect has to re-run on that transition or the reopened log
+  // attaches no scroll listener and sits at the top instead of the newest line.
+  it('pins a reopened log back to the newest entry', () => {
+    // Stub on the prototype, not the instance: reopening mounts a *fresh* <ul>,
+    // and the assertion below is about that new element being measured and
+    // pinned by the effect without the entry count having changed.
+    const proto = HTMLUListElement.prototype
+    const original = {
+      scrollHeight: Object.getOwnPropertyDescriptor(proto, 'scrollHeight'),
+      clientHeight: Object.getOwnPropertyDescriptor(proto, 'clientHeight'),
+    }
+    Object.defineProperty(proto, 'scrollHeight', { value: 700, configurable: true })
+    Object.defineProperty(proto, 'clientHeight', { value: 200, configurable: true })
+
+    try {
+      const entries = Array.from({ length: 40 }, (_, i) => entry({ seq: i, text: `line ${i}` }))
+      const props = { entries, label: 'Split log', onToggle: vi.fn() }
+      const { container, rerender } = render(<LogPanel {...props} open={true} />)
+
+      rerender(<LogPanel {...props} open={false} />)
+      expect(container.querySelector('.lbody')).toBeNull()
+
+      // Same entries, so `[entries.length]` alone would not re-run the effect.
+      rerender(<LogPanel {...props} open={true} />)
+      const body = container.querySelector('.lbody') as HTMLElement
+      expect(body).not.toBeNull()
+      expect(body.scrollTop).toBe(700)
+    } finally {
+      for (const [name, descriptor] of Object.entries(original)) {
+        if (descriptor) Object.defineProperty(proto, name, descriptor)
+        else delete (proto as unknown as Record<string, unknown>)[name]
+      }
+    }
   })
 })
 

@@ -29,7 +29,10 @@ function formatTime(iso: string): string {
 /** Collapsible log list shared by the split panel and the scan sidebar footer. */
 export default function LogPanel({ entries, label, summary, open, onToggle }: LogPanelProps) {
   const bodyRef = useRef<HTMLUListElement>(null)
-  useStickyScroll(bodyRef, [entries.length])
+  // `open` belongs in the deps: the <ul> unmounts while collapsed, so reopening
+  // a log mounts a fresh element. Without re-running, that element gets no
+  // scroll listener and stays pinned to the top instead of the newest line.
+  useStickyScroll(bodyRef, [entries.length, open])
 
   return (
     <div className="logbox">

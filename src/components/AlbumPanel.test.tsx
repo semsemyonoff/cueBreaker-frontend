@@ -1299,7 +1299,9 @@ describe('AlbumPanel', () => {
 
     fireEvent.click(await screen.findByText('Split 2 tracks'))
     expect(await screen.findByText('Split failed')).toBeInTheDocument()
-    expect(screen.getByText('first failure')).toBeInTheDocument()
+    // The auto-expand runs in an effect, so the log body lands one commit after
+    // 'Split failed' — a synchronous getByText here races that second render.
+    expect(await screen.findByText('first failure')).toBeInTheDocument()
 
     const logButton = await screen.findByRole('button', { name: /split log/i })
     expect(logButton).toHaveAttribute('aria-expanded', 'true')
@@ -1310,7 +1312,7 @@ describe('AlbumPanel', () => {
 
     await screen.findByText('Splitting')
     expect(await screen.findByText('Split failed')).toBeInTheDocument()
-    expect(screen.getByText('second failure')).toBeInTheDocument()
+    expect(await screen.findByText('second failure')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /split log/i })).toHaveAttribute(
       'aria-expanded',
       'true'
@@ -1446,6 +1448,61 @@ describe('AlbumPanel', () => {
 
     expect(await screen.findByText('cue parsed: 1 tracks')).toBeInTheDocument()
     expect(screen.getByText('done: 1 files')).toBeInTheDocument()
+  })
+
+  // `jobRun` outlives an album switch, so a restore guard that merely asked
+  // "is any job set?" would discard every later album's restore once one split
+  // had run in the session — the second album would show no result and no log.
+  it('restores a job for a second album after a first album has already split', async () => {
+    const previewBody = (title: string) => ({
+      performer: 'Artist',
+      title,
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+      ],
+    })
+    const statusBody = (text: string) => ({
+      status: 'done',
+      message: 'Split complete',
+      result_files: ['01 - One.flac'],
+      progress_current: 1,
+      progress_total: 1,
+      progress_detail: 'Complete',
+      log: [{ seq: 1, time: '2026-07-20T14:00:00Z', level: 'info', text }],
+      log_next: 2,
+    })
+
+    let previewTitle = 'Album'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody(previewTitle)))
+        if (url === '/api/status/Artist/Album/album.cue')
+          return Promise.resolve(jsonResponse(statusBody('first album line')))
+        if (url === '/api/status/Artist/Second/album.cue')
+          return Promise.resolve(jsonResponse(statusBody('second album line')))
+        if (url.startsWith('/api/status/')) return notFound()
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const { rerender } = render(<AlbumPanel item={item} />)
+    expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /split log/i }))
+    expect(await screen.findByText('first album line')).toBeInTheDocument()
+
+    previewTitle = 'Second'
+    rerender(<AlbumPanel item={{ ...item, path: 'Artist/Second' }} />)
+
+    expect(await screen.findByText('second album line')).toBeInTheDocument()
+    expect(screen.queryByText('first album line')).not.toBeInTheDocument()
   })
 
   it('ignores a 404 from the restore request and leaves the panel idle', async () => {

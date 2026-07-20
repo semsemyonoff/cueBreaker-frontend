@@ -564,7 +564,13 @@ describe('App', () => {
             total_seconds: 60,
             tracks: [
               { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
-              { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
+              {
+                number: 2,
+                title: 'Two',
+                performer: 'Artist',
+                index: '00:30:00',
+                start_seconds: 30,
+              },
             ],
           })
         )
