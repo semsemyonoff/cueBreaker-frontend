@@ -10,6 +10,13 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+// The backend 404s a status lookup for a job it never enqueued — the restore effect
+// that now fires on every AlbumPanel mount relies on that, so every fetch stub below
+// must answer `/api/status/…` the same way unless a test deliberately overrides it.
+function notFound() {
+  return Promise.resolve(jsonResponse({ error: 'not found' }, 404))
+}
+
 function stubPreview(byCue: Record<string, unknown>) {
   vi.stubGlobal(
     'fetch',
@@ -18,6 +25,7 @@ function stubPreview(byCue: Record<string, unknown>) {
         const { cue_file: cueFile } = JSON.parse(String(init.body)) as { cue_file: string }
         return Promise.resolve(jsonResponse(byCue[cueFile]))
       }
+      if (url.startsWith('/api/status/')) return notFound()
       return Promise.resolve(jsonResponse({}))
     })
   )
@@ -234,15 +242,23 @@ describe('AlbumPanel', () => {
         { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
       ],
     }
+    // The job id here is the deterministic `path/cue_file` form, identical to what
+    // AlbumPanel's mount-time restore effect requests — so the status handler must
+    // stay a 404 until the split is actually accepted, or the restore would report
+    // the album already done before the user ever clicks Split.
+    let splitAccepted = false
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
         if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
-        if (url === '/api/split')
+        if (url === '/api/split') {
+          splitAccepted = true
           return Promise.resolve(
             jsonResponse({ job_id: 'Artist/Album/album.cue', status: 'queued' }, 202)
           )
+        }
         if (url === '/api/status/Artist/Album/album.cue') {
+          if (!splitAccepted) return notFound()
           return Promise.resolve(
             jsonResponse({
               status: 'done',
@@ -251,6 +267,8 @@ describe('AlbumPanel', () => {
               progress_current: 4,
               progress_total: 4,
               progress_detail: 'Complete',
+              log: [],
+              log_next: 0,
             })
           )
         }
@@ -336,9 +354,12 @@ describe('AlbumPanel', () => {
               progress_current: 1,
               progress_total: 1,
               progress_detail: 'Complete',
+              log: [],
+              log_next: 0,
             })
           )
         }
+        if (url.startsWith('/api/status/')) return notFound()
         return Promise.resolve(jsonResponse({}))
       })
     )
@@ -385,6 +406,7 @@ describe('AlbumPanel', () => {
             )
           )
         }
+        if (url.startsWith('/api/status/')) return notFound()
         return Promise.resolve(jsonResponse({}))
       })
     )
@@ -534,6 +556,7 @@ describe('AlbumPanel', () => {
           if (!preview) return Promise.resolve(jsonResponse({ error: 'CUE file not found' }, 404))
           return Promise.resolve(jsonResponse(preview))
         }
+        if (url.startsWith('/api/status/')) return notFound()
         return Promise.resolve(jsonResponse({}))
       })
     )
@@ -583,6 +606,7 @@ describe('AlbumPanel', () => {
         }
         if (url === '/api/split')
           return Promise.resolve(jsonResponse({ error: 'Already in progress' }, 409))
+        if (url.startsWith('/api/status/')) return notFound()
         return Promise.resolve(jsonResponse({}))
       })
     )
@@ -602,7 +626,11 @@ describe('AlbumPanel', () => {
     })
     vi.stubGlobal(
       'fetch',
-      vi.fn((url: string) => (url === '/api/preview' ? pending : Promise.resolve(jsonResponse({}))))
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return pending
+        if (url.startsWith('/api/status/')) return notFound()
+        return Promise.resolve(jsonResponse({}))
+      })
     )
 
     const { container } = render(<AlbumPanel item={item} />)
@@ -637,7 +665,9 @@ describe('AlbumPanel', () => {
     // ⚠️ Pins today's behaviour, which is a dead end for the user: `cueFile` is ''
     // so the preview effect returns early (AlbumPanel.tsx:71) and nothing ever
     // resolves. Scan only lists CUE+FLAC pairs, so this shape should not reach the
-    // panel — recorded so the strand is a decision, not a surprise.
+    // panel — recorded so the strand is a decision, not a surprise. The job-restore
+    // effect shares the same `!cueFile` guard, so this also covers it issuing no
+    // request.
     const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({})))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -673,6 +703,8 @@ describe('AlbumPanel', () => {
         progress_current: 1,
         progress_total: 4,
         progress_detail: 'track 1',
+        log: [],
+        log_next: 0,
       },
       {
         status: 'error',
@@ -681,6 +713,8 @@ describe('AlbumPanel', () => {
         progress_current: 1,
         progress_total: 4,
         progress_detail: '',
+        log: [],
+        log_next: 0,
       },
     ]
     let poll = 0
@@ -695,6 +729,7 @@ describe('AlbumPanel', () => {
           poll += 1
           return Promise.resolve(jsonResponse(body))
         }
+        if (url.startsWith('/api/status/')) return notFound()
         return Promise.resolve(jsonResponse({}))
       })
     )
@@ -724,6 +759,7 @@ describe('AlbumPanel', () => {
       vi.fn((url: string) => {
         if (url === '/api/preview')
           return Promise.resolve(jsonResponse({ error: 'CUE file not found' }, 404))
+        if (url.startsWith('/api/status/')) return notFound()
         return Promise.resolve(jsonResponse({}))
       })
     )
@@ -766,6 +802,7 @@ describe('AlbumPanel', () => {
             calls === 2 ? jsonResponse({ error: 'backend hiccup' }, 500) : jsonResponse(body)
           )
         }
+        if (url.startsWith('/api/status/')) return notFound()
         return Promise.resolve(jsonResponse({}))
       })
     )
@@ -807,7 +844,10 @@ describe('AlbumPanel', () => {
           return Promise.resolve(jsonResponse(previewFor(path)))
         }
         if (url === '/api/split') return Promise.resolve(jsonResponse({ job_id: 'j1' }, 202))
-        if (url.startsWith('/api/status/'))
+        // Only the id actually returned by /api/split is a real job — every other
+        // /api/status/… request is the mount-time restore effect asking about an
+        // album that was never split, and the real backend would 404 that.
+        if (url === '/api/status/j1')
           return Promise.resolve(
             jsonResponse({
               status: 'done',
@@ -816,8 +856,11 @@ describe('AlbumPanel', () => {
               progress_current: 1,
               progress_total: 1,
               progress_detail: '',
+              log: [],
+              log_next: 0,
             })
           )
+        if (url.startsWith('/api/status/')) return notFound()
         return Promise.resolve(jsonResponse({}))
       })
     )
@@ -838,5 +881,665 @@ describe('AlbumPanel', () => {
     expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
 
     expect(onJobDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('restores a finished job on mount without re-signalling onJobDone', async () => {
+    const previewBody = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+      ],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
+        if (url === '/api/status/Artist/Album/album.cue')
+          return Promise.resolve(
+            jsonResponse({
+              status: 'done',
+              message: 'Split complete',
+              result_files: ['01 - One.flac'],
+              progress_current: 1,
+              progress_total: 1,
+              progress_detail: 'Complete',
+              log: [],
+              log_next: 0,
+            })
+          )
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const onJobDone = vi.fn()
+    render(<AlbumPanel item={item} onJobDone={onJobDone} />)
+
+    expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+    expect(screen.getByText('01 - One.flac')).toBeInTheDocument()
+    expect(onJobDone).not.toHaveBeenCalled()
+  })
+
+  it('restores an active job on mount, resumes polling, and signals onJobDone once it completes', async () => {
+    const previewBody = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
+      ],
+    }
+    let statusCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
+        if (url === '/api/status/Artist/Album/album.cue') {
+          statusCalls += 1
+          // Call 1 is the restore effect's own probe (which only decides whether to
+          // set jobRun); call 2 is usePoll's first tick once jobId is set — it never
+          // reuses the restore's response, so it must see "splitting" too or the
+          // active state is skipped entirely and rendered straight as done.
+          if (statusCalls <= 2) {
+            return Promise.resolve(
+              jsonResponse({
+                status: 'splitting',
+                message: 'Splitting',
+                result_files: [],
+                progress_current: 1,
+                progress_total: 2,
+                progress_detail: 'track 1',
+                log: [],
+                log_next: 0,
+              })
+            )
+          }
+          return Promise.resolve(
+            jsonResponse({
+              status: 'done',
+              message: 'Split complete',
+              result_files: ['01 - One.flac', '02 - Two.flac'],
+              progress_current: 2,
+              progress_total: 2,
+              progress_detail: 'Complete',
+              log: [],
+              log_next: 0,
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const onJobDone = vi.fn()
+    render(<AlbumPanel item={item} onJobDone={onJobDone} />)
+
+    expect(await screen.findByText('Splitting')).toBeInTheDocument()
+    expect(onJobDone).not.toHaveBeenCalled()
+
+    expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+    expect(onJobDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not let a slow restore response overwrite a split the user already started', async () => {
+    let resolveRestore: (res: Response) => void = () => {}
+    const pendingRestore = new Promise<Response>((resolve) => {
+      resolveRestore = resolve
+    })
+    const previewBody = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
+      ],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
+        if (url === '/api/split')
+          return Promise.resolve(jsonResponse({ job_id: 'fresh-job', status: 'queued' }, 202))
+        // The restore effect fires on mount and requests this exact deterministic id;
+        // it is left unresolved until after the user has started a fresh run below.
+        if (url === '/api/status/Artist/Album/album.cue') return pendingRestore
+        if (url === '/api/status/fresh-job')
+          return Promise.resolve(
+            jsonResponse({
+              status: 'splitting',
+              message: 'Splitting',
+              result_files: [],
+              progress_current: 1,
+              progress_total: 2,
+              progress_detail: 'track 1',
+              log: [],
+              log_next: 0,
+            })
+          )
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    render(<AlbumPanel item={item} />)
+
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+    expect(await screen.findByText('Splitting')).toBeInTheDocument()
+
+    // The stale restore now resolves as `done` — after the fresh split is already
+    // tracked under its own job id. It must not clobber the run in progress.
+    resolveRestore(
+      jsonResponse({
+        status: 'done',
+        message: 'Split complete',
+        result_files: ['01 - One.flac', '02 - Two.flac'],
+        progress_current: 4,
+        progress_total: 4,
+        progress_detail: 'Complete',
+        log: [],
+        log_next: 0,
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(screen.getByText('Splitting')).toBeInTheDocument()
+    expect(screen.queryByText('Split completed successfully')).toBeNull()
+  })
+
+  it('auto-expands the split log when a job fails', async () => {
+    const previewBody = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
+      ],
+    }
+    const polls = [
+      {
+        status: 'splitting',
+        message: 'Splitting',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: 'track 1',
+        log: [{ seq: 1, time: '2026-07-20T14:00:00Z', level: 'info', text: 'track 01/04' }],
+        log_next: 1,
+      },
+      {
+        status: 'error',
+        message: 'shnsplit: cannot read input',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: '',
+        log: [
+          {
+            seq: 2,
+            time: '2026-07-20T14:00:01Z',
+            level: 'error',
+            text: 'shnsplit stderr: file not found',
+          },
+        ],
+        log_next: 2,
+      },
+    ]
+    let poll = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
+        if (url === '/api/split')
+          return Promise.resolve(jsonResponse({ job_id: 'job-1', status: 'queued' }, 202))
+        if (url.startsWith('/api/status/job-1')) {
+          const body = polls[Math.min(poll, polls.length - 1)]
+          poll += 1
+          return Promise.resolve(jsonResponse(body))
+        }
+        if (url.startsWith('/api/status/')) return notFound()
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    render(<AlbumPanel item={item} />)
+
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+
+    expect(await screen.findByText('Split failed')).toBeInTheDocument()
+    const logButton = await screen.findByRole('button', { name: /split log/i })
+    expect(logButton).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('shnsplit stderr: file not found')).toBeInTheDocument()
+  })
+
+  it('keeps the split log closed once the user closes it, even as later renders occur', async () => {
+    const previewBody = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
+      ],
+    }
+    const polls = [
+      {
+        status: 'splitting',
+        message: 'Splitting',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: 'track 1',
+        log: [],
+        log_next: 0,
+      },
+      {
+        status: 'error',
+        message: 'shnsplit: cannot read input',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: '',
+        log: [
+          {
+            seq: 1,
+            time: '2026-07-20T14:00:01Z',
+            level: 'error',
+            text: 'shnsplit stderr: file not found',
+          },
+        ],
+        log_next: 1,
+      },
+    ]
+    let poll = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
+        if (url === '/api/split')
+          return Promise.resolve(jsonResponse({ job_id: 'job-1', status: 'queued' }, 202))
+        if (url.startsWith('/api/status/job-1')) {
+          const body = polls[Math.min(poll, polls.length - 1)]
+          poll += 1
+          return Promise.resolve(jsonResponse(body))
+        }
+        if (url.startsWith('/api/status/')) return notFound()
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const { rerender } = render(<AlbumPanel item={item} />)
+
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+    expect(await screen.findByText('Split failed')).toBeInTheDocument()
+
+    const logButton = await screen.findByRole('button', { name: /split log/i })
+    expect(logButton).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(logButton)
+    expect(logButton).toHaveAttribute('aria-expanded', 'false')
+
+    // A later, unrelated render pass (e.g. the owner bumping refreshToken) must not
+    // resurrect the panel the user just closed.
+    rerender(<AlbumPanel item={item} refreshToken={1} />)
+    expect(await screen.findByText('Split failed')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /split log/i })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+  })
+
+  it('auto-expands the split log again for a new failed run after Retry', async () => {
+    const previewBody = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
+      ],
+    }
+    const polls = [
+      {
+        status: 'splitting',
+        message: 'Splitting',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: 'track 1',
+        log: [],
+        log_next: 0,
+      },
+      {
+        status: 'error',
+        message: 'shnsplit: cannot read input',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: '',
+        log: [{ seq: 1, time: '2026-07-20T14:00:01Z', level: 'error', text: 'first failure' }],
+        log_next: 1,
+      },
+      {
+        status: 'splitting',
+        message: 'Splitting',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: 'track 1',
+        log: [],
+        log_next: 0,
+      },
+      {
+        status: 'error',
+        message: 'shnsplit: cannot read input',
+        result_files: [],
+        progress_current: 1,
+        progress_total: 4,
+        progress_detail: '',
+        log: [{ seq: 1, time: '2026-07-20T14:00:02Z', level: 'error', text: 'second failure' }],
+        log_next: 1,
+      },
+    ]
+    let poll = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
+        if (url === '/api/split')
+          return Promise.resolve(jsonResponse({ job_id: 'job-1', status: 'queued' }, 202))
+        if (url.startsWith('/api/status/job-1')) {
+          const body = polls[Math.min(poll, polls.length - 1)]
+          poll += 1
+          return Promise.resolve(jsonResponse(body))
+        }
+        if (url.startsWith('/api/status/')) return notFound()
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    render(<AlbumPanel item={item} />)
+
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+    expect(await screen.findByText('Split failed')).toBeInTheDocument()
+    // The auto-expand runs in an effect, so the log body lands one commit after
+    // 'Split failed' — a synchronous getByText here races that second render.
+    expect(await screen.findByText('first failure')).toBeInTheDocument()
+
+    const logButton = await screen.findByRole('button', { name: /split log/i })
+    expect(logButton).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(logButton)
+    expect(logButton).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(await screen.findByText('Retry'))
+
+    await screen.findByText('Splitting')
+    expect(await screen.findByText('Split failed')).toBeInTheDocument()
+    expect(await screen.findByText('second failure')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /split log/i })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+  })
+
+  it('renders split log entries from usePoll in order, surviving a switch back to the same album', async () => {
+    const previewBody = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        { number: 2, title: 'Two', performer: 'Artist', index: '00:30:00', start_seconds: 30 },
+      ],
+    }
+    const doneLog = [
+      { seq: 1, time: '2026-07-20T14:00:00Z', level: 'info', text: 'cue parsed: 2 tracks' },
+      { seq: 2, time: '2026-07-20T14:00:01Z', level: 'info', text: 'track 01/02 → 01 - One.flac' },
+      { seq: 3, time: '2026-07-20T14:00:02Z', level: 'info', text: 'done: 2 files' },
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
+        if (url === '/api/split')
+          return Promise.resolve(jsonResponse({ job_id: 'job-1', status: 'queued' }, 202))
+        if (url.startsWith('/api/status/job-1'))
+          return Promise.resolve(
+            jsonResponse({
+              status: 'done',
+              message: 'Split complete',
+              result_files: ['01 - One.flac', '02 - Two.flac'],
+              progress_current: 2,
+              progress_total: 2,
+              progress_detail: 'Complete',
+              log: doneLog,
+              log_next: 3,
+            })
+          )
+        if (url.startsWith('/api/status/')) return notFound()
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const other: ScanPair = { ...item, path: 'Artist/Other' }
+    const { rerender } = render(<AlbumPanel item={item} />)
+
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+    expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /split log/i }))
+    await screen.findByText('done: 2 files')
+
+    const entryTexts = () =>
+      ['cue parsed: 2 tracks', 'track 01/02 → 01 - One.flac', 'done: 2 files'].map(
+        (text) => screen.getByText(text).textContent
+      )
+    expect(entryTexts()).toEqual([
+      'cue parsed: 2 tracks',
+      'track 01/02 → 01 - One.flac',
+      'done: 2 files',
+    ])
+
+    rerender(<AlbumPanel item={other} />)
+    expect(await screen.findByText('Other')).toBeInTheDocument()
+
+    rerender(<AlbumPanel item={item} />)
+    expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+    // The album switch collapses the panel (a failed run's auto-expand must not
+    // follow the user to the next album), so reopen it to inspect the entries.
+    expect(screen.getByRole('button', { name: /split log/i })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+    fireEvent.click(screen.getByRole('button', { name: /split log/i }))
+    await screen.findByText('done: 2 files')
+    expect(entryTexts()).toEqual([
+      'cue parsed: 2 tracks',
+      'track 01/02 → 01 - One.flac',
+      'done: 2 files',
+    ])
+  })
+
+  it('renders log entries for a job restored from the backend on mount', async () => {
+    const previewBody = {
+      performer: 'Artist',
+      title: 'Album',
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+      ],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody))
+        if (url === '/api/status/Artist/Album/album.cue')
+          return Promise.resolve(
+            jsonResponse({
+              status: 'done',
+              message: 'Split complete',
+              result_files: ['01 - One.flac'],
+              progress_current: 1,
+              progress_total: 1,
+              progress_detail: 'Complete',
+              log: [
+                {
+                  seq: 1,
+                  time: '2026-07-20T14:00:00Z',
+                  level: 'info',
+                  text: 'cue parsed: 1 tracks',
+                },
+                { seq: 2, time: '2026-07-20T14:00:01Z', level: 'info', text: 'done: 1 files' },
+              ],
+              log_next: 2,
+            })
+          )
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    render(<AlbumPanel item={item} />)
+
+    expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /split log/i }))
+
+    expect(await screen.findByText('cue parsed: 1 tracks')).toBeInTheDocument()
+    expect(screen.getByText('done: 1 files')).toBeInTheDocument()
+  })
+
+  // `jobRun` outlives an album switch, so a restore guard that merely asked
+  // "is any job set?" would discard every later album's restore once one split
+  // had run in the session — the second album would show no result and no log.
+  it('restores a job for a second album after a first album has already split', async () => {
+    const previewBody = (title: string) => ({
+      performer: 'Artist',
+      title,
+      file: 'album.flac',
+      genre: '',
+      date: '',
+      has_cover: false,
+      split_done: false,
+      output_tracks: 0,
+      total_seconds: 60,
+      tracks: [
+        { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+      ],
+    })
+    const statusBody = (text: string) => ({
+      status: 'done',
+      message: 'Split complete',
+      result_files: ['01 - One.flac'],
+      progress_current: 1,
+      progress_total: 1,
+      progress_detail: 'Complete',
+      log: [{ seq: 1, time: '2026-07-20T14:00:00Z', level: 'info', text }],
+      log_next: 2,
+    })
+
+    let previewTitle = 'Album'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/preview') return Promise.resolve(jsonResponse(previewBody(previewTitle)))
+        if (url === '/api/status/Artist/Album/album.cue')
+          return Promise.resolve(jsonResponse(statusBody('first album line')))
+        if (url === '/api/status/Artist/Second/album.cue')
+          return Promise.resolve(jsonResponse(statusBody('second album line')))
+        if (url.startsWith('/api/status/')) return notFound()
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
+
+    const { rerender } = render(<AlbumPanel item={item} />)
+    expect(await screen.findByText('Split completed successfully')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /split log/i }))
+    expect(await screen.findByText('first album line')).toBeInTheDocument()
+
+    previewTitle = 'Second'
+    rerender(<AlbumPanel item={{ ...item, path: 'Artist/Second' }} />)
+
+    // The switch collapses the log; reopening it must show the second album's
+    // restored entries, never the first album's still-buffered ones.
+    expect(await screen.findByText('Second')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /split log/i }))
+    expect(await screen.findByText('second album line')).toBeInTheDocument()
+    expect(screen.queryByText('first album line')).not.toBeInTheDocument()
+  })
+
+  it('ignores a 404 from the restore request and leaves the panel idle', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubPreview({
+      'album.cue': {
+        performer: 'Artist',
+        title: 'Album',
+        file: 'album.flac',
+        genre: '',
+        date: '',
+        has_cover: false,
+        split_done: false,
+        output_tracks: 0,
+        total_seconds: 60,
+        tracks: [
+          { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+        ],
+      },
+    })
+
+    render(<AlbumPanel item={item} />)
+
+    expect(await screen.findByText('Split 1 tracks')).toBeInTheDocument()
+    expect(screen.getByText('Unsplit')).toBeInTheDocument()
+    expect(consoleError).not.toHaveBeenCalled()
+    consoleError.mockRestore()
   })
 })

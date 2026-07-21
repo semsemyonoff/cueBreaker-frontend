@@ -20,23 +20,27 @@ afterEach(() => {
 })
 
 describe('scan', () => {
-  it('GETs /api/scan and returns the parsed pairs', async () => {
-    const pairs = [
-      {
-        path: 'Artist/Album',
-        abs_path: '/input/Artist/Album',
-        cue_files: ['album.cue'],
-        flac_files: ['album.flac'],
-        split_done: false,
-        output_tracks: 0,
-      },
-    ]
-    const fetchMock = mockFetch(jsonResponse(pairs))
+  it('GETs /api/scan and returns the parsed result', async () => {
+    const result_ = {
+      items: [
+        {
+          path: 'Artist/Album',
+          abs_path: '/input/Artist/Album',
+          cue_files: ['album.cue'],
+          flac_files: ['album.flac'],
+          split_done: false,
+          output_tracks: 0,
+        },
+      ],
+      log: [{ seq: 1, time: '2026-07-20T14:03:22Z', level: 'warn', text: 'skip Foo — bad' }],
+      summary: { dirs_walked: 1, albums: 1, unsplit: 1, skipped: 0, elapsed_ms: 5 },
+    }
+    const fetchMock = mockFetch(jsonResponse(result_))
 
     const result = await scan()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/scan', undefined)
-    expect(result).toEqual(pairs)
+    expect(result).toEqual(result_)
   })
 
   it('throws ApiError with the server message on failure', async () => {
@@ -153,6 +157,8 @@ describe('status', () => {
       progress_current: 1,
       progress_total: 4,
       progress_detail: 'track 1',
+      log: [],
+      log_next: 0,
     }
     const fetchMock = mockFetch(jsonResponse(jobStatus))
 
@@ -160,6 +166,47 @@ describe('status', () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/status/Artist's%20Album/album.cue", undefined)
     expect(result).toEqual(jobStatus)
+  })
+
+  it('omits log_since from the query string when since is not given', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        status: 'queued',
+        message: '',
+        result_files: [],
+        progress_current: 0,
+        progress_total: 0,
+        progress_detail: '',
+        log: [],
+        log_next: 0,
+      })
+    )
+
+    await status('Artist/Album/album.cue')
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/status/Artist/Album/album.cue', undefined)
+  })
+
+  it('appends log_since when since is non-zero', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        status: 'queued',
+        message: '',
+        result_files: [],
+        progress_current: 0,
+        progress_total: 0,
+        progress_detail: '',
+        log: [],
+        log_next: 0,
+      })
+    )
+
+    await status('Artist/Album/album.cue', 42)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/status/Artist/Album/album.cue?log_since=42',
+      undefined
+    )
   })
 })
 

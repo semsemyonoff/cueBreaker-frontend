@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ScanPair } from './api/types'
+import type { ScanPair, ScanResult } from './api/types'
 import App from './App'
 
 function jsonResponse(body: unknown): Response {
@@ -8,6 +8,20 @@ function jsonResponse(body: unknown): Response {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+function scanResult(items: ScanPair[]): ScanResult {
+  return {
+    items,
+    log: [],
+    summary: {
+      dirs_walked: items.length,
+      albums: items.length,
+      unsplit: items.length,
+      skipped: 0,
+      elapsed_ms: 0,
+    },
+  }
 }
 
 function errorResponse(status: number, error: string): Response {
@@ -43,7 +57,7 @@ function splittingBackend(items: ScanPair[] | (() => ScanPair[])) {
   const scanned = typeof items === 'function' ? items : () => items
   return (url: string) => {
     if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-    if (url === '/api/scan') return Promise.resolve(jsonResponse(scanned()))
+    if (url === '/api/scan') return Promise.resolve(jsonResponse(scanResult(scanned())))
     if (url === '/api/preview') {
       return Promise.resolve(
         jsonResponse({
@@ -74,6 +88,8 @@ function splittingBackend(items: ScanPair[] | (() => ScanPair[])) {
           progress_current: 1,
           progress_total: 2,
           progress_detail: 'Track 1',
+          log: [],
+          log_next: 0,
         })
       )
     }
@@ -87,7 +103,7 @@ describe('App', () => {
       'fetch',
       vi.fn((url: string) => {
         if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-        return Promise.resolve(jsonResponse([]))
+        return Promise.resolve(jsonResponse(scanResult([])))
       })
     )
 
@@ -102,8 +118,8 @@ describe('App', () => {
       'fetch',
       vi.fn((url: string) => {
         if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-        if (url === '/api/scan') return Promise.resolve(jsonResponse([album]))
-        return Promise.resolve(jsonResponse([]))
+        if (url === '/api/scan') return Promise.resolve(jsonResponse(scanResult([album])))
+        return Promise.resolve(jsonResponse(scanResult([])))
       })
     )
 
@@ -133,7 +149,7 @@ describe('App', () => {
     const fetchMock = vi.fn((url: string) => {
       if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
       if (fail) return Promise.resolve(errorResponse(503, 'backend unavailable'))
-      return Promise.resolve(jsonResponse([]))
+      return Promise.resolve(jsonResponse(scanResult([])))
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -168,7 +184,7 @@ describe('App', () => {
       vi.fn((url: string, init?: RequestInit) => {
         if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
         if (url === '/api/scan')
-          return Promise.resolve(jsonResponse([{ ...album, cue_files: cueFiles }]))
+          return Promise.resolve(jsonResponse(scanResult([{ ...album, cue_files: cueFiles }])))
         if (url === '/api/preview' && init?.body) {
           const { cue_file: cue } = JSON.parse(String(init.body)) as { cue_file: string }
           return Promise.resolve(jsonResponse(previewFor(cue)))
@@ -198,7 +214,7 @@ describe('App', () => {
       'fetch',
       vi.fn((url: string) => {
         if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-        if (url === '/api/scan') return Promise.resolve(jsonResponse(items))
+        if (url === '/api/scan') return Promise.resolve(jsonResponse(scanResult(items)))
         if (url === '/api/preview') {
           return Promise.resolve(
             jsonResponse({
@@ -332,7 +348,7 @@ describe('App', () => {
     const scanned = () => [{ ...album, split_done: done, output_tracks: done ? 2 : 0 }]
     const fetchMock = vi.fn((url: string) => {
       if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
-      if (url === '/api/scan') return Promise.resolve(jsonResponse(scanned()))
+      if (url === '/api/scan') return Promise.resolve(jsonResponse(scanResult(scanned())))
       if (url === '/api/preview') {
         return Promise.resolve(
           jsonResponse({
@@ -370,6 +386,8 @@ describe('App', () => {
             progress_current: 2,
             progress_total: 2,
             progress_detail: '',
+            log: [],
+            log_next: 0,
           })
         )
       }
@@ -470,6 +488,124 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(screen.queryByText('Library scan failed')).not.toBeInTheDocument())
     expect(container.querySelector('.tstat')?.textContent).toBe('1 splitting1 unsplit')
+  })
+
+  it('leaves the previous scan log in place when a rescan fails', async () => {
+    const firstLog = [
+      { seq: 1, time: '2026-07-20T14:03:22Z', level: 'warn' as const, text: 'first scan skip' },
+    ]
+    let rescanned = false
+    const fetchMock = vi.fn((url: string) => {
+      if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
+      if (url === '/api/scan') {
+        if (!rescanned) {
+          rescanned = true
+          return Promise.resolve(
+            jsonResponse({
+              items: [],
+              log: firstLog,
+              summary: { dirs_walked: 1, albums: 0, unsplit: 0, skipped: 1, elapsed_ms: 1 },
+            })
+          )
+        }
+        return Promise.resolve(errorResponse(500, 'scan input dir: permission denied'))
+      }
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    await screen.findByText('No unsplit CUE + FLAC albums found')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rescan' }))
+    expect(await screen.findByText('Library scan failed')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Scan log/ }))
+    expect(screen.getByText('first scan skip')).toBeInTheDocument()
+  })
+
+  it('replaces the scan log via the quiet refresh when a job completes', async () => {
+    let done = false
+    const fetchMock = vi.fn((url: string) => {
+      if (url === '/api/version') return Promise.resolve(jsonResponse({ version: '1.0.0' }))
+      if (url === '/api/scan') {
+        return Promise.resolve(
+          jsonResponse({
+            items: [{ ...album, split_done: done, output_tracks: done ? 2 : 0 }],
+            log: [
+              {
+                seq: done ? 2 : 1,
+                time: '2026-07-20T14:03:22Z',
+                level: 'info' as const,
+                text: done ? 'after split' : 'before split',
+              },
+            ],
+            summary: {
+              dirs_walked: 1,
+              albums: 1,
+              unsplit: done ? 0 : 1,
+              skipped: 0,
+              elapsed_ms: 1,
+            },
+          })
+        )
+      }
+      if (url === '/api/preview') {
+        return Promise.resolve(
+          jsonResponse({
+            performer: 'Artist',
+            title: 'Album',
+            file: 'album.flac',
+            genre: '',
+            date: '',
+            has_cover: false,
+            split_done: done,
+            output_tracks: done ? 2 : 0,
+            total_seconds: 60,
+            tracks: [
+              { number: 1, title: 'One', performer: 'Artist', index: '00:00:00', start_seconds: 0 },
+              {
+                number: 2,
+                title: 'Two',
+                performer: 'Artist',
+                index: '00:30:00',
+                start_seconds: 30,
+              },
+            ],
+          })
+        )
+      }
+      if (url === '/api/split')
+        return Promise.resolve(jsonResponse({ job_id: 'j1', status: 'queued' }))
+      if (url === '/api/status/j1') {
+        done = true
+        return Promise.resolve(
+          jsonResponse({
+            status: 'done',
+            message: 'Done',
+            result_files: ['01.flac', '02.flac'],
+            progress_current: 2,
+            progress_total: 2,
+            progress_detail: '',
+            log: [],
+            log_next: 0,
+          })
+        )
+      }
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.click(await screen.findByText('Album'))
+
+    fireEvent.click(screen.getByRole('button', { name: /Scan log/ }))
+    expect(await screen.findByText('before split')).toBeInTheDocument()
+
+    fireEvent.click(await screen.findByText('Split 2 tracks'))
+
+    await waitFor(() => expect(screen.getByText('after split')).toBeInTheDocument())
+    expect(screen.queryByText('before split')).not.toBeInTheDocument()
   })
 })
 

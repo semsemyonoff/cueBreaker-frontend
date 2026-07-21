@@ -1,6 +1,4 @@
-# CI for the cueBreaker SPA. Lives under .github/workflows so it runs on both
-# GitHub and the self-hosted Forgejo (git.horn) runners — mirrors the sibling
-# beetDeck / AlbFetcharr frontend repos.
+# CI for the cueBreaker SPA: eslint + prettier + tsc, vitest + build.
 name: CI
 on:
   push:
