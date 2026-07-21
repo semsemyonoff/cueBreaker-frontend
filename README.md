@@ -1,15 +1,12 @@
 # cueBreaker — frontend
 
-The React + Vite + TypeScript single-page app for
-[cueBreaker](https://git.horn/cueBreaker), a "Waveform & Cuts" tool for splitting
-single-file FLAC albums using CUE sheets.
+The React + Vite + TypeScript single-page app for **cueBreaker**, a "Waveform & Cuts"
+tool for splitting single-file FLAC albums using CUE sheets.
 
-This repo is **the SPA only**. In production it is built to static assets and embedded
-into the Go backend ([`cueBreaker/backend`](https://git.horn/cueBreaker/backend)),
-which serves it on `/` with the API under `/api/*`. The combined image and the local
-dev environment are assembled by the workspace repo
-([`cueBreaker/workspace`](https://git.horn/cueBreaker/workspace)) — the same three-repo
-pattern used across the sibling `beetDeck` / `AlbFetcharr` products.
+This repo is **the SPA only**. It talks to the cueBreaker backend purely over HTTP
+(`/api/*`) — no shared code, no shared filesystem. In production it is built to static
+assets and embedded into the Go backend binary, which serves it on `/`; that combined
+image is assembled in the cueBreaker deployment repository.
 
 ## Stack
 
@@ -33,7 +30,7 @@ src/
 
 Tests are co-located as `*.test.ts` / `*.test.tsx`, with jsdom gap-fillers (cleanup,
 `localStorage`, `matchMedia`) in `src/setupTests.ts`. Visual/CSS work is verified by
-`npm run build` + manual QA against the design prototype (kept in the workspace repo).
+`npm run build` + manual QA against the design prototype.
 
 The waveform itself is **decorative** by design — the bars are synthetic, not audio peaks. The
 cut lines drawn over them are real, derived from the CUE `INDEX` times, and the timecode row
@@ -85,15 +82,24 @@ npm run format         # prettier --write .
 npm run typecheck      # tsc -b --noEmit
 ```
 
-The dev server proxies `/api` to the backend. Point it at a running backend with
-`BACKEND_URL` (the DWE workspace sets `BACKEND_URL=http://backend:5000`); it defaults
-to `http://localhost:5000`.
+Requires Node.js 22+.
 
-## Full stack
-
-To run the frontend against the backend with hot reload, use the workspace repo:
+The dev server proxies `/api` to the backend. Point it at a running backend with the
+`BACKEND_URL` env var; it defaults to `http://localhost:5000`.
 
 ```bash
-git clone ssh://git@git.horn:2222/cueBreaker/workspace.git
-cd workspace && dwe deploy run
+BACKEND_URL=http://localhost:5001 npm run dev
 ```
+
+## Production build
+
+```bash
+npm run build        # tsc -b && vite build → dist/
+```
+
+The output is a plain static bundle served from `/`. The release image copies it into the
+backend's `web/dist/`, where it is embedded into the Go binary via `//go:embed`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

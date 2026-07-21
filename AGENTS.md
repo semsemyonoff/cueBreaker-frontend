@@ -2,8 +2,9 @@
 
 React + Vite + TypeScript SPA for cueBreaker (FLAC+CUE album splitter). Built to static
 assets and embedded into the Go backend in production; served on `/` with the API under
-`/api/*`. Part of a three-repo product (`backend`, `frontend`, `workspace`) mirroring the
-sibling `beetDeck` / `AlbFetcharr` orgs.
+`/api/*`. This repo is the SPA alone: it talks to the backend purely over HTTP, with no
+shared code and no shared filesystem. The backend lives in a separate repository, and the
+image bundling the two is assembled in the cueBreaker deployment repo.
 
 ## Layout
 
