@@ -124,7 +124,11 @@ function FolderRow({
         onKeyDown={activateOnKey(toggleThis)}
       >
         <span className={isOpen ? 'tarrow open' : 'tarrow'}>▶</span>
-        <span className="tfname">{node.name}</span>
+        {/* Ellipsised to the sidebar width in CSS; `title` is how the full name
+            stays reachable, since the row has nowhere to wrap. */}
+        <span className="tfname" title={node.name}>
+          {node.name}
+        </span>
         <span className="tcount">{node.count}</span>
       </div>
       {isOpen && (
@@ -196,7 +200,11 @@ function AlbumRow({
         <i />
         <i />
       </span>
-      <span className="taname">{node.name}</span>
+      {/* Ellipsised to the sidebar width in CSS; `title` is how the full name
+          stays reachable, since the row has nowhere to wrap. */}
+      <span className="taname" title={node.name}>
+        {node.name}
+      </span>
       {splitting ? (
         <span className="tameta">
           {Math.round(progressPercent(activeJob.progressCurrent, activeJob.progressTotal))}%

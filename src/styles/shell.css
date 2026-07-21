@@ -114,6 +114,12 @@
   width: var(--sidebar-w);
   flex-shrink: 0;
   display: flex;
+  /* A flex item's automatic minimum size is its min-content width, and min-width
+     beats width — so without this a long album name would widen the sidebar past
+     --sidebar-w and paint over the work area. Every name is ellipsised below, but
+     this is the structural guarantee: the sidebar is exactly --sidebar-w wide, no
+     matter what the library is called. */
+  min-width: 0;
 }
 
 .side {
@@ -123,6 +129,9 @@
   flex-direction: column;
   min-height: 0;
   flex: 1;
+  /* Same reason as .sidewrap: .side is itself a flex item, and its min-content
+     width comes from the tree rows. */
+  min-width: 0;
 }
 
 .sidetop {
@@ -193,8 +202,13 @@
 
 .tree {
   padding: 10px 8px;
-  overflow: auto;
+  /* Vertical only: rows are ellipsised to the sidebar width, so a horizontal
+     scrollbar would only ever appear from a layout slip — hiding it keeps that
+     from turning into a scrollable overhang under the work area. */
+  overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
+  min-width: 0;
 }
 
 .tfolder {
@@ -214,6 +228,7 @@
   color: var(--dim2);
   font-size: 10px;
   width: 10px;
+  flex-shrink: 0;
   transition: transform 0.15s;
 }
 
@@ -221,15 +236,24 @@
   transform: rotate(90deg);
 }
 
+/* Folder names are ellipsised exactly like album names (.taname): a collection
+   folder is often the longest label in the tree. The full name is on the row's
+   `title`. */
 .tfname {
   font: 600 12.5px var(--mono);
   color: var(--dim);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tcount {
   font: 500 11px var(--mono);
   color: var(--dim2);
   margin-left: auto;
+  flex-shrink: 0;
+  padding-left: 8px;
 }
 
 .tkids {
@@ -298,6 +322,7 @@
 .taname {
   font: 500 12.5px var(--mono);
   color: var(--text);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

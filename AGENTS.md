@@ -101,6 +101,18 @@ npm run typecheck      # tsc -b --noEmit
   with it so one album's auto-expanded failure log does not follow the user to the next. The
   accumulated log is gated on `jobId` exactly as `job` is: `usePoll` resets in an effect, so
   without the guard an album switch would paint the previous album's entries for one frame.
+- **The sidebar is exactly `--sidebar-w` wide, and the tree must never be able to widen it.**
+  A flex item's automatic minimum size is its min-content width, and `min-width` beats
+  `width` — so a single long album name (real libraries have 90-character ones) used to
+  blow `.side` out past `.sidewrap` and paint the album panel's waveform over the tree.
+  Three things hold the line and all three are load-bearing: `min-width: 0` on `.sidewrap`
+  and `.side`, `overflow-x: hidden` on `.tree`, and `overflow: hidden` + `text-overflow:
+  ellipsis` + `white-space: nowrap` on **both** `.taname` and `.tfname` (folder names are
+  often the longest label in the tree). The truncation is visual only — `Tree.tsx` puts the
+  full name on each row's `title`, which is the only way it stays reachable, and
+  `Tree.test.tsx` pins that. jsdom has no layout engine, so the title is the only part of
+  this a unit test can catch; re-check the widths in a real browser after touching the
+  sidebar CSS.
 - **Album rows are `<a href>`, and the URL is what addresses an album** — so a row can be
   opened in a new tab and an album can be linked to. There is still no router: the address is
   a single `?album=<path>` query parameter (`tree/albumUrl.ts`), chosen over a path segment

@@ -303,3 +303,31 @@ describe('Tree with non-ASCII names', () => {
     expect(names).toEqual(['Disc 1', 'Disc 2', 'Disc 10'])
   })
 })
+
+// Album and folder names are ellipsised to the sidebar width in CSS (a long
+// name used to widen the sidebar past --sidebar-w and paint over the album
+// panel). `title` is the only thing that keeps the full name reachable, since
+// an ellipsised row has nowhere to wrap — jsdom has no layout, so the title is
+// what this suite can actually pin.
+describe('Tree long names', () => {
+  const LONG =
+    '(2004) Beneath... Between... Beyond... [Compilation, Europe, Warner Bros. Records, 9362-48709-2]'
+
+  it('carries the full album name in a title attribute', () => {
+    renderTree([pair(`Lossless/${LONG}`)])
+
+    fireEvent.click(screen.getByText('Lossless').closest('.tfolder')!)
+
+    const name = document.querySelector('.taname')!
+    expect(name).toHaveAttribute('title', LONG)
+    expect(name.textContent).toBe(LONG)
+  })
+
+  it('carries the full folder name in a title attribute', () => {
+    renderTree([pair(`${LONG}/Album`)])
+
+    const folder = document.querySelector('.tfname')!
+    expect(folder).toHaveAttribute('title', LONG)
+    expect(folder.textContent).toBe(LONG)
+  })
+})
