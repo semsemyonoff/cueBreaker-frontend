@@ -34,7 +34,8 @@ Tests are co-located as `*.test.ts` / `*.test.tsx`, with jsdom gap-fillers (clea
 
 The waveform itself is **decorative** by design — the bars are synthetic, not audio peaks. The
 cut lines drawn over them are real, derived from the CUE `INDEX` times, and the timecode row
-under the waveform gives them a visible axis. See `AGENTS.md` for the reasoning.
+under the waveform gives them a visible axis. See [docs/decisions.md](docs/decisions.md) for the
+reasoning.
 
 ## Keyboard & accessibility
 

@@ -319,6 +319,7 @@
   opacity: 0.55;
 }
 
+/* Ellipsised, never wrapped: no album name may widen the sidebar past --sidebar-w. */
 .taname {
   font: 500 12.5px var(--mono);
   color: var(--text);
