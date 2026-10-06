@@ -61,5 +61,3 @@ Read the source comment before changing any of these; each explains a bug it pre
 - `tree/albumUrl.ts` — query parameter vs path segment, and the encoding it implies.
 - `docs/decisions.md` (at the repo root, not under `src/`) — the decisions that live in neither
   code nor tests.
-
-> `CLAUDE.md` is a symlink to this file. Edit `AGENTS.md`.
